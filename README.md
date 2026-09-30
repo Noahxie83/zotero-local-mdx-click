@@ -1,134 +1,187 @@
 <p align="center">
-  <img src="docs/assets/cover.svg" alt="Local MDX：本地词典，跟着论文走。" width="100%">
+  <img src="docs/assets/cover.svg" alt="Local MDX：Zotero 本地词典插件，支持点击与划选查词。" width="100%">
 </p>
 
-<h1 align="center">Local MDX · 本地 MDX 点击与划选查词</h1>
+<h1 align="center">Local MDX</h1>
 
-<p align="center">留在论文里，用你自己的词典。</p>
+<p align="center"><b>Zotero 本地词典插件 · 点击与划选查词</b></p>
+<p align="center">在文献阅读中查询单词与词组，使用本地词典的释义、排版和发音。</p>
 
 <p align="center">
   <a href="https://github.com/Noahxie83/zotero-local-mdx-click/releases/tag/v1.1.2"><img alt="版本 1.1.2" src="https://img.shields.io/badge/version-1.1.2-087bd0"></a>
-  <img alt="Zotero 10.0" src="https://img.shields.io/badge/Zotero-10.0-102b46">
+  <img alt="支持 Zotero 10.0 系列" src="https://img.shields.io/badge/Zotero-10.0-102b46">
   <a href="https://github.com/Noahxie83/zotero-local-mdx-click/actions/workflows/build.yml"><img alt="构建状态" src="https://github.com/Noahxie83/zotero-local-mdx-click/actions/workflows/build.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="GPL 3.0 or later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-586d7f"></a>
 </p>
 
 <p align="center">
   <a href="https://github.com/Noahxie83/zotero-local-mdx-click/releases/download/v1.1.2/local-mdx-click-1.1.2.xpi"><b>下载安装包</b></a> ·
-  <a href="https://noahxie83.github.io/zotero-local-mdx-click/">交互示例</a> ·
-  <a href="docs/USER_GUIDE.md">完整指南</a> ·
-  <a href="docs/RESTORE.md">复原教程</a> ·
-  <a href="docs/CHANGES.md">全部功能变更</a>
+  <a href="https://noahxie83.github.io/zotero-local-mdx-click/"><b>体验交互示例</b></a> ·
+  <a href="docs/USER_GUIDE.md">使用指南</a> ·
+  <a href="docs/RESTORE.md">设置恢复</a> ·
+  <a href="docs/CHANGES.md">版本变更</a>
 </p>
 
 ---
 
-在 Zotero 10.0 系列 PDF 阅读器中，**单击单词，或划选一个词/词组，查询本地 MDX 词典**。自行选择文件夹、切换词典，读取配套 MDD 分卷或外置资源，保留每部词典自己的排版。词条和发音在本机处理，无需翻译账号。
+**Local MDX** 在 Zotero PDF 阅读器中提供离线词典查询。单击英文单词，或划选完整的单词与词组，即可查看所选 MDX 词典的释义。插件支持多词典切换、配套 MDD 分卷和外置资源，并提供内置 SPX/Speex 解码器。
 
-## 五个值得试的功能
+**使用流程：** 选择词典目录 → 打开 PDF → 点击或划选文字 → 查看释义与发音
 
-| 功能 | 使用场景 |
+## 功能亮点
+
+| 功能 | 说明 |
 | --- | --- |
-| **通用 MDX / MDD 分卷** | 选择任意词典目录，列出全部 MDX；同名 `.mdd`、`.1.mdd`、`.2.mdd`、`.10.mdd` 按数字关联，可手动添加其他名称/目录的资源包。 |
-| **每部词典，自己的排版** | 按实际 HTML/CSS 引用加载图片、字体和样式；不把所有词典套成同一模板。需要简洁阅读时一键切换文字模式。 |
-| **把断行词选完整，再查询** | `transfor-` 换行 `mation` 同时尝试 `transfor-mation` 和 `transformation`；真实复合词保留原写法，词组保留空格。 |
-| **查词与批注，在一个菜单** | 划选后在同一弹窗查看词条、选择 8 色、保存高亮或下划线，避免两个菜单覆盖。设置可恢复 Zotero 自带菜单。 |
-| **SPX / Speex 离线发音** | 内置解码器，从 MDD 或外置资源读取标准 Ogg/SPX 并转 WAV；无需 ffmpeg、Python 或另装解码程序。 |
+| **点击与划选查词** | 在阅读器内查询单词或词组；划选后可同时使用高亮、下划线和颜色选择。 |
+| **断行单词识别** | 对 `transfor-` 换行 `mation`，分别查询 `transfor-mation` 与 `transformation`，合并相同词条；复合词保留连字符候选。 |
+| **多词典管理** | 选择词典目录，导入当前层的全部 MDX，在下拉框中切换查询词典；也可直接选择单个 MDX 文件。 |
+| **MDD 分卷与配套资源** | 自动关联同名 MDD 和数字分卷，按引用读取 CSS、图片、图标、字体与音频；支持手动关联资源包和外置资源目录。 |
+| **词典原有排版** | 加载词条引用的 HTML/CSS 和本地资源，呈现各词典的样式；可切换为简洁文字排版。 |
+| **内置离线发音解码** | 标准 Ogg/SPX 音频通过内置 Speex 解码器转换为 WAV，无需安装额外解码程序。 |
 
-## 看几个例子
+查词与批注使用同一划选弹窗，提供 **8 色、高亮和下划线**。需要原有操作方式时，可在设置中恢复 Zotero 自带菜单。
 
-**[打开在线交互示例 →](https://noahxie83.github.io/zotero-local-mdx-click/)** · [下载单文件 HTML，离线打开](https://github.com/Noahxie83/zotero-local-mdx-click/releases/download/v1.1.2/local-mdx-click-demo-1.1.2.html)
+## 交互演示
 
-| 示例 | 可以操作什么 |
+**[打开在线示例 →](https://noahxie83.github.io/zotero-local-mdx-click/)** · [下载单文件 HTML](https://github.com/Noahxie83/zotero-local-mdx-click/releases/download/v1.1.2/local-mdx-click-demo-1.1.2.html)
+
+| 场景 | 示例操作 |
 | --- | --- |
-| 01 · 单击 `network` | 点击阅读区词语，在词典下拉框切换“研究英语”和“简明双语”，观察不同 CSS、图片和分卷资源。 |
-| 02 · 划选 `transfor-` / `mation` | 查看两种候选分别命中、相同释义合并；演示图中的断行文本可以完整选中。 |
-| 03 · 划选 `neural network` | 查询完整词组，查看合并菜单的颜色、高亮与下划线。 |
+| **单词查询** · `network` | 点击阅读区词语，切换“研究英语”与“简明双语”示例词典，体验不同排版和分卷图片资源。 |
+| **断行查询** · `transfor-` / `mation` | 划选跨行的两部分文字，查看保留连字符与拼接后的查询候选。 |
+| **词组与批注** · `neural network` | 查询完整词组，体验颜色、高亮和下划线按钮。 |
 
-示例使用**自制 MDX/MDD 和插件真实解析、排版组件**，不包含用户商业词典。网页批注按钮只演示类型与颜色，不写入 Zotero；试听音频是自制提示音，不是单词发音。安装插件后才会查询自己的词典并保存文献批注。
+演示使用项目自制的 MDX/MDD 数据和插件的解析、排版组件。网页批注按钮仅展示操作反馈；音频为提示音。实际词典查询、单词发音和文献批注需在 Zotero 中使用插件。
 
-## 三步开始
+## 快速开始
 
-1. **安装**：下载 [1.1.2 XPI](https://github.com/Noahxie83/zotero-local-mdx-click/releases/download/v1.1.2/local-mdx-click-1.1.2.xpi)。Zotero → 工具 → 插件 → 齿轮 → 从文件安装插件，完成后重启。
-2. **选择词典**：设置 → 本地 MDX 点击查词 → 选择词典文件夹，或直接选择 MDX。下拉框选择当前词典。
-3. **开始阅读**：打开有文字层的 PDF，普通指针单击英文词，或拖选完整单词/词组后松开鼠标。需要批注时再点击高亮/下划线。
+### 1. 安装插件
 
-已有版本可覆盖安装，原词典/资源设置保留。工具栏“本地词典 ✓”可开关功能，右键换目录；用 ×、Esc、点击外部或滚动 PDF 关闭词条。安装前已打开的 PDF 可重开标签。
+下载 **[最新稳定版 XPI](https://github.com/Noahxie83/zotero-local-mdx-click/releases/latest)**，在 Zotero 中依次选择：
 
-### 词典从哪里找？
+**工具 → 插件 → 齿轮 → 从文件安装插件**
 
-用户推荐在 **[PDAWiki · MDict 专区](https://www.pdawiki.com/forum/forum.php?gid=7)** 搜索所需的 MDX 词典及配套资源，下载时遵循帖子与词典作者的授权说明。插件本身不附带词典，也不会自动下载或上传词典。
+选择 `.xpi` 安装包，安装后重启 Zotero。已有版本可覆盖安装，词典路径与资源设置会保留。
 
-下载后，保留配套的 MDD 分卷、CSS、图片、图标和字体的目录结构，再在插件中选择该目录。只拿到 MDX 而遗漏资源，可能有释义但没有原样式、图片或发音。文件名不同的 MDD 可手动添加。
+### 2. 添加词典
+
+打开 **设置 → 本地 MDX 点击查词**，选择词典文件夹或 MDX 文件，再从下拉框选择当前词典。默认采用“词典原有排版”；如需简洁显示，可切换为“简洁文字排版”。
+
+### 3. 开始查询
+
+打开有文字层的 PDF，用普通指针单击英文单词，或拖选完整单词/词组后松开鼠标。可在弹窗或 PDF 工具栏切换词典。
+
+- 点击词条发音图标播放本地音频，点击内部词条链接继续查询。
+- 划选后选择颜色，再点击高亮或下划线保存批注。
+- 使用 ×、Esc、点击外部或滚动 PDF 关闭弹窗。
+- 工具栏“本地词典 ✓”可切换启用状态；安装前已打开的 PDF 可重新打开标签。
+
+更多设置见 [完整使用指南](docs/USER_GUIDE.md)。
+
+## 词典与资源
+
+### 获取词典
+
+可在 **[PDAWiki · MDict 专区](https://www.pdawiki.com/forum/forum.php?gid=7)** 搜索 MDX 词典及配套资源，按帖子与词典作者的授权说明获取文件。安装包不附带词典，词典需单独准备。
+
+下载后保留 MDD 分卷、CSS、图片、图标和字体的目录结构。完整资源有助于呈现词典排版、插图与发音。
+
+### 目录示例
 
 ```text
-YourDictionaries/
-  Study.mdx
-  Study.mdd
-  Study.1.mdd
-  Study.2.mdd
-  Study.10.mdd
+Dictionaries/
+  DictionaryA.mdx
+  DictionaryA.mdd
+  DictionaryA.1.mdd
+  DictionaryA.2.mdd
+  DictionaryA.10.mdd
+  DictionaryB.mdx
+  DictionaryB.mdd
   style.css
   images/
   fonts/
 ```
 
-这些文件名仅说明通用规则，插件没有固定词典名、资源前缀或用户路径。MDX 列表只扫描当前层；资源可位于子目录。查询时只使用选中的一部词典。
+以上名称仅为示例，可使用任意词典名称和目录。MDX 列表扫描当前目录，资源可位于子目录；每次查询使用当前选中的一部词典。数字分卷按编号排序，名称不同或位于其他目录的 MDD 可手动添加。
 
-## 改过哪些功能，怎么复原？
+## 设置与恢复
 
-[**完整变更清单**](docs/CHANGES.md) 逐项列出从 0.1.0 到 1.1.2 的新增与修复；[**复原教程**](docs/RESTORE.md) 包含菜单、查词、排版、资源关联、历史版本及共存设置。
-
-| 想恢复的行为 | 操作 |
+| 需求 | 设置方式 |
 | --- | --- |
-| Zotero 自带划选菜单 | 设置 → 划选菜单 → **Zotero 自带菜单**。暂停划选自动查询，普通单击查词保留。 |
-| 只关闭划选自动查询 | 取消“划选单词或词组后自动查询”；插件批注工具仍可用。 |
-| 全部暂停，恢复原阅读操作 | 关闭“启用本地查词”，或点击工具栏开关；也可在插件管理器停用。 |
-| 以前的简洁文字样式 | 显示方式 → **简洁文字排版**；改回“词典原有排版”可重新加载原样式。 |
-| 原来的自动 MDD 关联 | 选择当前词典 → **恢复自动关联**，清除该词典手动资源配置；不会删除文件。 |
-| 更换/替换后重新读取 | 选择原目录或 MDX，再点“刷新词典列表”。 |
-| 某个历史插件版本 | 从 [Releases](https://github.com/Noahxie83/zotero-local-mdx-click/releases) 下载对应 XPI，按 [回退教程](docs/RESTORE.md#回退到历史插件版本) 安装。 |
+| **恢复 Zotero 自带划选菜单** | 划选菜单 → **Zotero 自带菜单**。此模式暂停划选自动查询，保留单击查词。 |
+| **关闭划选自动查询** | 取消“划选单词或词组后自动查询”；插件批注工具仍可使用。 |
+| **暂停全部插件功能** | 关闭“启用本地查词”或使用工具栏开关；也可在插件管理器停用。 |
+| **切换词条显示方式** | 显示方式 → **简洁文字排版** / **词典原有排版**。 |
+| **恢复自动资源关联** | 选择当前词典 → **恢复自动关联**，清除该词典的手动资源配置。 |
+| **更新词典文件** | 增加、替换或删除文件后，点击“刷新词典列表”。 |
+| **回退插件版本** | 从 [Releases](https://github.com/Noahxie83/zotero-local-mdx-click/releases) 下载目标 XPI，按 [回退教程](docs/RESTORE.md#回退到历史插件版本) 安装。 |
 
-关闭、停用或卸载会恢复插件包装的菜单回调，已保存的 Zotero 批注保留，本地词典文件不删除。若另有点击查询扩展，同时弹窗时可在其中一个扩展关闭相应触发方式。
+停用或卸载后，阅读器菜单恢复原有行为，已保存的批注和词典文件保留。所有设置的具体影响见 **[恢复设置与回退教程](docs/RESTORE.md)**；完整功能及历史变更见 **[版本变更](docs/CHANGES.md)**。
 
-## 1.1.2 修复与验证
+## 兼容性
 
-根据代码审查修复 **LZO 精确边界、合法别名循环误判、目录扫描失败丢失当前选择、资源来源报错阻断回退、Speex 累计时长**。普通音频首次只读一次，MDD 增加有界定位/缺失缓存与统计；修改资源配置保留未变化的 MDX 索引。
-
-- **33/33 自动化回归通过**，包含 MDX/MDD、LZO、CSS、资源回退/取消/缓存、划选、批注适配和 Speex。
-- **Zotero 10.0.3 独立文献库验收通过**：高亮/下划线保存，重开保留，类型/颜色/文本/位置核对，只读按钮，分屏菜单，自带菜单恢复和停止插件后的清理。
-- [GitHub CI](https://github.com/Noahxie83/zotero-local-mdx-click/actions/workflows/build.yml) 执行测试与构建。[证据与覆盖范围](docs/REVIEW_FIXES_1.1.2.md)
-
-真实词典发音播放、全部第三方私有格式及所有扩展组合尚未全面实测；示例和已通过用例不代表所有词典都已兼容。
-
-## 支持范围
-
-| 项目 | 当前范围 |
+| 项目 | 支持范围 |
 | --- | --- |
-| 阅读器 | Zotero **10.0 系列** PDF；扫描文献需 OCR 文字层 |
+| 阅读器 | Zotero **10.0 系列** PDF 阅读器；扫描文献需要 OCR 文字层 |
 | MDX / MDD | 1.x、2.x；raw/zlib/LZO；2.x `Encrypted=2` 索引混淆 |
-| 查询 | 大小写配置、内部别名、重复词目、跨块；至多 3 个连字符候选 |
-| 划选 | 规范化后最多 256 字符、16 个词；长选区仍可批注 |
-| 资源 | 原 HTML/CSS、导入样式、图片、字体、背景和本地音频，按需读取 |
-| Speex | 标准 Ogg/SPX，单/双声道、多帧；单文件累计最多 30 秒，输入 8 MB |
+| 查询 | 大小写配置、内部别名、重复词目与跨块内容 |
+| 划选 | 规范化后最多 256 字符、16 个词；最多 3 个连字符候选 |
+| 资源 | 本地 HTML/CSS、导入样式、图片、字体、背景与音频 |
+| Speex | 标准 Ogg/SPX；单/双声道、多帧；单文件累计最多 30 秒，输入限额 8 MB |
 
-词典脚本、远程资源和在线翻译接口不运行或加载；脚本驱动的折叠、统计和特殊控件可能缺失。暂不支持 MDX/MDD 3、密码解密、StyleSheet 反引号宏与词形自动还原；词形依赖词典自带跳转。资源提示不等于“整个词典太大读不完”，可悬停查看具体缺失项再补资源。
+<details>
+<summary><b>格式限制与使用说明</b></summary>
 
-更多编码、资源查找顺序、大小限额和兼容性见 [完整指南](docs/USER_GUIDE.md)、[资源设计](docs/RESOURCE_SUPPORT.md)、[Speex 说明](docs/SPEEX_AUDIO.md)。
+- 词组查询需要词典收录对应词目或跳转项；长句翻译不属于当前功能。
+- 断行单词需要划选完整的两部分；普通单击取词不跨行扩展。
+- 词典 JavaScript 与远程资源不运行或加载，依赖脚本的折叠、统计和特殊控件可能无法呈现。
+- 暂不支持 MDX/MDD 3、密码解密、StyleSheet 反引号宏与词形自动还原；词形查询依赖词典自带跳转。
+- 音频播放受文件格式与 Zotero/系统解码能力影响，第三方私有格式的兼容性需按实际文件确认。
 
-## 历史与开发
+编码、资源查找顺序和读取限额见 [使用指南](docs/USER_GUIDE.md)、[资源支持](docs/RESOURCE_SUPPORT.md)、[Speex 说明](docs/SPEEX_AUDIO.md)。
 
-从 0.1.0 到 1.1.2 的 [标签和 Releases](https://github.com/Noahxie83/zotero-local-mdx-click/releases) 保留各版对应源码快照、安装包和原说明。1.1.2 为最新稳定版，只有一个带解码器的安装包。[版本记录](docs/RELEASE_PLAN.md) · [详细发布说明](RELEASE_NOTES.md)
+</details>
 
-需要 Node.js 开发；**插件运行无需 Node.js 或 Python**。
+<details>
+<summary><b>常见问题</b></summary>
 
-```powershell
+**有释义，但缺少样式、图片或发音？** 先确认配套 MDD 与外置资源完整。名称不同的 MDD 需手动关联；资源提示可悬停查看具体缺失项，补齐后刷新词典列表。
+
+**划选后出现多个弹窗？** 在设置中选择合适的划选菜单模式。若同时使用其他查词扩展，可在其中一个扩展中关闭重叠的触发方式。
+
+**可以离线使用吗？** 查询本地词典和播放本地发音均在设备上完成，无需翻译账号。词典文件需预先准备。
+
+</details>
+
+## 质量与验证
+
+**1.1.2** 修复了 LZO 输出边界、词目别名判断、目录切换失败后的状态保留、资源读取失败后的回退，以及 Speex 累计时长控制，并优化了资源读取与缓存。
+
+- **33 项自动化回归通过**：覆盖 MDX/MDD、LZO、CSS、资源回退、取消与缓存、划选、批注适配及 Speex。
+- **Zotero 10.0.3 隔离环境验证通过**：覆盖高亮/下划线保存、重开保留、只读状态、分屏菜单和原菜单恢复。
+- [GitHub Actions](https://github.com/Noahxie83/zotero-local-mdx-click/actions/workflows/build.yml) · [验证记录与覆盖范围](docs/REVIEW_FIXES_1.1.2.md)
+
+以上为已完成的验证记录；真实词典发音、第三方私有格式及其他扩展组合尚未全面实测。
+
+## 开发与构建
+
+开发需要 Node.js；插件运行无需 Node.js 或 Python。
+
+```sh
 npm ci --ignore-scripts
 npm test
 npm run build
 npm run pack:source
-# 可选：重新生成独立 HTML 示例
+```
+
+生成独立 HTML 示例：
+
+```sh
 node scripts/build-showcase.mjs
 ```
 
-项目采用 **GPL-3.0-or-later**，第三方许可见 [THIRD_PARTY.md](THIRD_PARTY.md)。这是独立开发的 Zotero 插件，非 Zotero 官方产品，也不是 Hover Translate Eudic 的修改版。
+源码结构与预览命令见 [开发指南](docs/USER_GUIDE.md#开发)。各版本安装包、源码快照与校验和见 [Releases](https://github.com/Noahxie83/zotero-local-mdx-click/releases)；历史记录见 [版本变更](docs/CHANGES.md) 和 [发布说明](RELEASE_NOTES.md)。
+
+## 开源许可
+
+项目采用 **[GPL-3.0-or-later](LICENSE)**，第三方依赖许可见 [THIRD_PARTY.md](THIRD_PARTY.md)。Local MDX 是独立开发的 Zotero 插件，非 Zotero 官方产品。词典内容与资源的使用权限以各自作者的授权为准。
