@@ -308,7 +308,9 @@ export function createApp(env, pluginID) {
         if (ticket !== request || !current.host.isConnected) return;
         const issues = scope?.missing.size || resources?.errors.size || 0;
         current.footer.textContent = basename(getPath()) + (resourceError ? ' · 资源读取失败，显示文字排版' : issues ? ' · 部分资源未能读取' : getMode() === 'original' ? ' · 词典原有排版' : ' · 简洁文字排版');
-        current.footer.title = resourceError || [...(scope?.missing || []), ...(resources?.errors || [])].slice(0, 30).join('\n');
+        const resourceDetails = [...(scope?.missing || []), ...(resources?.errors || [])].slice(0, 30);
+        if (scope?.optionalMissing.size) resourceDetails.push('字体备用路径未找到（该组仍有其他字体来源）：\n' + [...scope.optionalMissing].slice(0, 16).join('\n'));
+        current.footer.title = resourceError || resourceDetails.join('\n');
       } catch (e) {
         if (ticket === request && getPath() === selectedPath && current.host.isConnected) current.body.textContent = errorText(e);
         log(e);

@@ -45,7 +45,7 @@ try {
     const scope = new core.ResourceScope(resources, null, resource => 'data:' + resource.mime + ';base64,' + Buffer.from(resource.bytes).toString('base64'));
     const plans = [];
     for (const entry of entries.slice(0, 12)) plans.push(await core.prepareNativeDefinition(entry.html, scope));
-    examples.push({ name: path.basename(mdxPath), plans, missing: [...scope.missing], errors: [...resources.errors] });
+    examples.push({ name: path.basename(mdxPath), plans, missing: [...scope.missing], optionalMissing: [...scope.optionalMissing], errors: [...resources.errors] });
     console.log(path.basename(mdxPath) + ': ' + plans.length + ' 条词条，' + scope.urls.size + ' 个嵌入资源');
     scope.close(); resources.close(); dictionary.clearCache();
   }
@@ -73,7 +73,7 @@ const client = await build({
         }));
       });
       card.footer.textContent='原有排版预览 · '+examples[index].name;
-      card.footer.title=[...examples[index].missing,...examples[index].errors].join('\\n');
+      card.footer.title=[...examples[index].missing,...examples[index].errors,...(examples[index].optionalMissing.length?['字体备用路径（有其他来源）：',...examples[index].optionalMissing]:[])].join('\\n');
       card.host.style.left='50%';card.host.style.top='76px';card.host.style.transform='translateX(-50%)';
       card.host.shadowRoot.querySelector('.card').style.maxHeight='min(580px,calc(100vh - 100px))';
     }

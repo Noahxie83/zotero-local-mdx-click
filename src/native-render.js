@@ -19,7 +19,66 @@ const BASE_STYLE = `
 export const NATIVE_CSP = "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src blob: data:; font-src blob: data:; media-src blob: data:; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'";
 // Some dictionaries hide pronunciation images until their own script starts.
 // Show the already-resolved image of a playable link without running that script.
-const CONTROLS_STYLE = 'a[data-mdx-audio] img { display: inline-block !important; }';
+const CONTROLS_STYLE = `
+  a[data-mdx-audio] img { display: inline-block !important; }
+  ol[data-mdx-native-number]::before { content: none !important; display: none !important; }
+  ol[data-mdx-native-number] > li::marker {
+    color: var(--mdx-number-color, currentColor);
+    font-weight: var(--mdx-number-weight, normal);
+    font-size: var(--mdx-number-size, inherit);
+  }
+`;
+
+function isListNumberContent(content, start) {
+  if (!content || content === 'none' || content === 'normal') return false;
+  // CSSOM may return either the resolved string or the original attr/counter
+  // expression. Use the CSS parser to handle quoted strings and CSS escapes.
+  let value;
+  try { value = parseCSS(content, { context: 'value' }); } catch { return false; }
+  let dynamic = false, uncertain = false;
+  const text = [];
+  value.children.forEach(part => {
+    if (part.type === 'String') text.push(part.value);
+    else if (part.type === 'WhiteSpace') return;
+    else if (part.type === 'Function') {
+      const name = part.name.toLowerCase();
+      const argument = part.children.first;
+      if (argument?.type === 'Identifier' &&
+          ((name === 'attr' && argument.name.toLowerCase() === 'start') ||
+           (name === 'counter' && argument.name.toLowerCase() === 'list-item'))) dynamic = true;
+      else uncertain = true;
+    } else uncertain = true;
+  });
+  if (uncertain) return false;
+  if (dynamic) return /^[\s.()\[\]、:：]*$/.test(text.join(''));
+  const number = text.join('').match(/^[\s(\[]*([+-]?\d+)[\s.)\]、:：]*$/);
+  return !!number && Number(number[1]) === start;
+}
+
+function normalizeListNumbers(doc) {
+  // A prefixed legacy list has no browser list markers in its source form.
+  // Converting it to HTML <ol>/<li> adds markers. Only suppress its generated
+  // number when an actual native numbered marker is also present.
+  for (const list of doc.querySelectorAll('ol[data-mdx-prefixed-list]')) {
+    const first = [...list.children].find(child => child.localName === 'li');
+    if (!first) continue;
+    const win = doc.defaultView;
+    const itemStyle = win.getComputedStyle(first);
+    if (!itemStyle.display.includes('list-item') ||
+        !['decimal', 'decimal-leading-zero'].includes(itemStyle.listStyleType)) continue;
+    const marker = win.getComputedStyle(first, '::marker').content;
+    if (marker === 'none' || marker === '""' || marker === "''") continue;
+    const before = win.getComputedStyle(list, '::before');
+    if (before.display === 'none' || before.visibility === 'hidden' ||
+        !isListNumberContent(before.content, list.start)) continue;
+    // Retain the dictionary's color and emphasis on the remaining number.
+    const color = before.color, weight = before.fontWeight, size = before.fontSize;
+    list.style.setProperty('--mdx-number-color', color);
+    list.style.setProperty('--mdx-number-weight', weight);
+    list.style.setProperty('--mdx-number-size', size);
+    list.setAttribute('data-mdx-native-number', '');
+  }
+}
 
 // Every popup owns its URLs. Closing it revokes images/fonts/audio and stops
 // pending preparation from allocating more URLs.
@@ -29,9 +88,10 @@ export class ResourceScope {
     this.win = win;
     this.makeURL = makeURL;
     this.urls = new Map(); this.pending = new Map(); this.missing = new Set();
+    this.optionalMissing = new Set();
     this.bytes = 0; this.closed = false;
   }
-  async url(reference, base = '') {
+  async url(reference, base = '', { required = true } = {}) {
     if (this.closed) throw new Error('查词窗口已关闭。');
     if (/^data:(image\/(?:png|jpeg|gif|webp|svg\+xml)|font\/[^;,]+|application\/(?:font-woff|font-woff2|vnd.ms-fontobject|x-font-ttf|x-font-woff|x-font-opentype));/i.test(reference)) {
       return reference.length <= 4_000_000 ? reference : '';
@@ -42,17 +102,19 @@ export class ResourceScope {
     if (!this.pending.has(normalized)) {
       this.pending.set(normalized, (async () => {
         const resource = await this.resources.read(key);
-        if (!resource) { this.missing.add(key); return ''; }
+        if (!resource) return { url: '', reason: key };
         if (this.closed) throw new Error('查词窗口已关闭。');
         if (this.urls.size >= 256 || this.bytes + resource.bytes.length > 96 * 1024 * 1024) {
-          this.missing.add(key + '（超过窗口资源限额）'); return '';
+          return { url: '', reason: key + '（超过窗口资源限额）' };
         }
         this.bytes += resource.bytes.length;
         const url = this.makeURL ? this.makeURL(resource) : this.win.URL.createObjectURL(new this.win.Blob([resource.bytes], { type: resource.mime }));
-        this.urls.set(normalized, url); return url;
+        this.urls.set(normalized, url); return { url };
       })());
     }
-    return this.pending.get(normalized);
+    const result = await this.pending.get(normalized);
+    if (!result.url && required) this.missing.add(result.reason);
+    return result.url;
   }
   close() {
     this.closed = true;
@@ -81,7 +143,7 @@ class DictionaryStyles {
     let ast;
     try { ast = parseCSS(css, { context, parseCustomProperty: true }); }
     catch { this.scope.missing.add(base || '内嵌样式无法解析'); return ''; }
-    const imports = [], urls = [];
+    const imports = [], urls = [], fontSources = new Map();
     walkCSS(ast, {
       enter(node) {
         if (node.type === 'Atrule' && node.name.toLowerCase() === 'import') {
@@ -90,7 +152,12 @@ class DictionaryStyles {
         if (node.type === 'Atrule' && ['charset', 'namespace'].includes(node.name.toLowerCase())) {
           node.type = 'Raw'; node.value = ''; return walkCSS.skip;
         }
-        if (node.type === 'Url') urls.push(node);
+        if (node.type === 'Declaration' && node.property.toLowerCase() === 'src' && this.atrule?.name.toLowerCase() === 'font-face') {
+          fontSources.set(node, { available: false, local: false, missing: [] });
+        }
+        const fontSource = fontSources.get(this.declaration);
+        if (node.type === 'Function' && node.name.toLowerCase() === 'local' && fontSource) fontSource.local = true;
+        if (node.type === 'Url') urls.push({ node, fontSource });
         // HTML namespace prefixes are normalized in the corresponding DOM.
         if (node.type === 'TypeSelector') node.name = node.name.replace(/^xhtml(?:\\:|\|)/i, '');
       },
@@ -109,9 +176,24 @@ class DictionaryStyles {
       }
       node.type = 'Raw'; node.value = imported;
     }
-    for (const node of urls) {
+    for (const { node, fontSource } of urls) {
       if (node.value.startsWith('#')) continue;
-      node.value = await this.scope.url(node.value, base) || 'data:,';
+      const reference = node.value;
+      const url = await this.scope.url(reference, base, { required: !fontSource });
+      if (fontSource) {
+        if (url) fontSource.available = true;
+        else {
+          const key = localReference(reference, base);
+          if (key) fontSource.missing.push(key);
+        }
+      }
+      node.value = url || 'data:,';
+    }
+    // src entries in @font-face are alternatives, not a set of required files.
+    // Missing candidates matter only when the whole group has no usable source.
+    for (const source of fontSources.values()) {
+      const target = source.available || source.local ? this.scope.optionalMissing : this.scope.missing;
+      for (const key of source.missing) target.add(key);
     }
     return generateCSS(ast);
   }
@@ -162,6 +244,7 @@ export async function prepareNativeDefinition(html, scope) {
           if (style) attrs.style = style;
         } else attrs[key] = value.slice(0, 10000);
       }
+      if (tag === 'ol' && node.tagName !== tag) attrs['data-mdx-prefixed-list'] = '';
       if (tag === 'img' && attributes.src) {
         const url = await scope.url(attributes.src);
         if (url) attrs.src = url;
@@ -182,7 +265,12 @@ export async function prepareNativeDefinition(html, scope) {
       if (tag === 'a' && attributes.href) {
         if (/^sound:\/\//i.test(attributes.href)) {
           const key = localReference(attributes.href);
-          if (key) { attrs['data-mdx-audio'] = key; attrs.tabindex = '0'; attrs.role = 'button'; attrs['aria-label'] ||= '播放发音'; }
+          if (key) {
+            attrs['data-mdx-audio'] = key; attrs.tabindex = '0'; attrs.role = 'button'; attrs['aria-label'] ||= '播放发音';
+            const extension = key.split('.').pop().toUpperCase();
+            const hint = extension === 'SPX' ? 'SPX/Speex 发音（当前未接入解码）' : `${extension} 发音`;
+            attrs.title = attrs.title ? attrs.title + ' · ' + hint : hint;
+          }
         } else {
           const entry = entryReference(attributes.href);
           if (entry) { attrs['data-mdx-entry'] = entry; attrs.tabindex = '0'; attrs.role = 'link'; }
@@ -230,6 +318,7 @@ export function mountNativeDefinition(doc, container, plan, scope, { onEntry, on
       const style = element(frameDoc, 'style');
       style.textContent = BASE_STYLE + '\n' + plan.css.join('\n') + '\n' + CONTROLS_STYLE; frameDoc.head.append(style);
       appendNativeNodes(frameDoc, frameDoc.body, plan.nodes);
+      normalizeListNumbers(frameDoc);
       const resize = () => {
         if (disposed) return;
         // The outer popup supplies scrolling; do not clamp content height.
@@ -249,12 +338,12 @@ export function mountNativeDefinition(doc, container, plan, scope, { onEntry, on
           if (!url) throw new Error('未找到音频：' + key);
           audio = element(frameDoc, 'audio'); audio.src = url;
           audio.addEventListener('error', () => {
-            if (!disposed && ticket === audioRequest) onStatus?.(/\.spx$/i.test(key) ? '该 SPX 发音需要额外解码，当前版本尚不支持。' : '当前环境无法播放此音频。');
+            if (!disposed && ticket === audioRequest) onStatus?.(/\.spx$/i.test(key) ? 'SPX/Speex 解码尚未接入，可选择此词条的 MP3 发音图标。' : '当前环境无法播放此音频。');
           });
           await audio.play();
           if (!disposed && ticket === audioRequest) onStatus?.('正在播放发音');
         } catch (e) {
-          if (!disposed && ticket === audioRequest) onStatus?.(/\.spx$/i.test(key) ? '该 SPX 发音需要额外解码，当前版本尚不支持。' : e.message);
+          if (!disposed && ticket === audioRequest) onStatus?.(/\.spx$/i.test(key) ? 'SPX/Speex 解码尚未接入，可选择此词条的 MP3 发音图标。' : e.message);
         }
       };
       const activate = event => {
