@@ -1,38 +1,35 @@
-# 词典原生样式与 MDD 资源支持
+# 通用 MDX/MDD 资源读取设计（0.2.0）
 
-## 当前状态
+词典名称、目录、CSS 名称、分卷数量与资源前缀均不写成模板。按用户选择的路径和词条实际引用读取资源。
 
-0.1.2 修复了 `network` 的文字排版问题，仍使用插件提供的统一文字样式。以下是针对用户所提供词典的只读调查与后续实现方向，不是已完成的功能。
+## 容器
 
-## 实际资源分布
+`MDictContainer` 处理公共头部、校验、压缩与记录块。`MDXDictionary` 返回文字，`MDDArchive` 强制按 UTF-16LE 解析资源名并返回原始字节，不使用去标点词目规则。
 
-已直接读取配套 MDD 的资源索引，未批量解包音频或图片：
+MDD 先读块元数据，查询时优先查头尾资源名范围中的关键词块。若未找到，再扫描剩余块，以兼容其他排序方式。索引与记录块都有缓存上限。重复偏移按下一更大偏移确定资源长度，内容允许跨记录块。
 
-| 文件 | 其中的样式文件 | 资源示例 |
-| --- | --- | --- |
-| TLD.mdd | v.css | snd 开头的 SPX 音频 |
-| TLD.1.mdd | l.css | ameProns 目录的 MP3 |
-| TLD.2.mdd | o.css | mediaenglish 前缀的 SPX |
-| TLD.3.mdd | cls.css | COLmp3 前缀的 SPX |
-| TLD.4.mdd | mw.css | mw 前缀的 SPX |
-| TLD.5.mdd | d.css | 以编号命名的 SPX |
-| TLD.6.mdd | c.css | uk_pron 等目录的 MP3 |
-| 牛津高阶双解(第9版)_V3.1.2版.mdd | oalecd9.css | oalecd9.js、字体、图片资源 |
-| 牛津同名 .1.mdd / .2.mdd | 未发现 CSS | 单词与例句的 MP3 |
+实现范围为 1.x/2.x、raw/zlib/LZO 和索引 `Encrypted=2`。3.x、密码解密和私有格式未承诺支持。
 
-同目录还存在 `p.css`、`oalecd9.css`、`v.png`、`luk.png`、`lus.png`、`cluk.png`、`clus.png`、`cuk.png`、`cus.png`、`ouk.png`、`ous.png`、`mw.png`、`d.png` 等外置资源。因此，样式和图标可能存放在 MDD，也可能在词典旁边，需要兼顾两种来源。
+## 分卷与路径
 
-TLD 词条引用了 `p.css`、分卷中的多个 CSS，以及同目录的图标图片。`p.css` 本身规定了头部字体、音标颜色、考试标签、词性显示和词频数据的隐藏 / 行内排版。当前统一文字转换没有加载这些文件，导致本应隐藏或并排的数字呈现为连续段落。
+`LocalResources` 接收文件系统适配器，无固定系统路径。匹配所选 MDX 的同名 `.mdd` 和 `.N.mdd`，按数字排序，允许缺号。其他名称/位置的分卷手动添加；资源目录与额外分卷按 MDX 保存。
 
-## 后续实现方向
+依次查找指定外置目录、MDX 同目录、自动 MDD 和额外 MDD。文件夹逐层解析路径，支持子目录与大小写差异。定位缓存有容量限制，切换或刷新时清理。
 
-1. 将 MDX 容器的索引和按需解压逻辑扩展为可读取 MDD 的二进制资源；MDD 资源名按 UTF-16 解析，资源内容保留为字节，不按词条文字解码。
-2. 根据所选 MDX 的文件名关联同名 `.mdd`、`.1.mdd`、`.2.mdd` 等分卷，只索引需要的资源包并限制缓存。
-3. 根据词条实际引用定位同目录资源和 MDD 资源，保留每部词典自己的 HTML 结构、类名和 CSS。
-4. 将词条放进独立的受限显示区域，使原词典样式不改变 Zotero / PDF 阅读器界面。
-5. 按需提供图片、字体和音频；使用插件自身的播放逻辑。TLD 同时含 MP3 与 SPX，SPX 解码兼容需要另外评估。
-6. 无原生样式的词典继续提供通用文字排版；依赖词典脚本的特殊交互再针对实际需求兼容。
+统一斜杠、根标记、百分号编码和点路径，拒绝越过资源根、系统绝对路径、控制字符与外部 URL。MDD 只读，不批量解包。
 
-大部分外观应来自词典自身资源，无需逐个手写模板。
+## 排版与生命周期
 
-参考：[MDict 格式说明](https://github.com/csarron/mdict-analysis)、[js-mdict 实现](https://github.com/terasum/js-mdict)。
+parse5 读取 HTML，保留类名、ID、普通元数据和自定义标签，过滤脚本、事件属性、活动嵌入、表单及未处理 URL。HTML namespace 标签和 CSS 选择器对应转换。css-tree 解析 CSS 导入、URL 和导入条件，资源引用按所在 CSS 的目录解析。
+
+iframe 使用 `sandbox="allow-same-origin"`，不提供脚本权限。先创建插件自己的空文档与严格 CSP，再由插件插入过滤后的新节点。词典 HTML 不直接替换 Zotero 文档，词典 CSS 只影响自己的 iframe。
+
+每个弹窗独立管理 Blob URL；关闭时停止音频、移除观察器与 iframe 并撤销 URL。切换或退出还会清理资源缓存。原有排版失败提供文字回退。
+
+`sound://` 与词条查询链接由插件处理。部分词典用脚本显示发音图片，通用规则只显示已有发音链接中的图片，不执行词典脚本。不附带 SPX/Speex 解码器；CSS 不能替代脚本计算。
+
+## 交付状态
+
+已完成本地构建，尚未完成 Zotero 运行验收。本次没有运行或新增测试。安装包和源码不含用户词典；本地预览位于源码目录外，可能包含词条与资源，不纳入发布包。
+
+参考：[MDict 分析](https://github.com/csarron/mdict-analysis)、[格式说明](https://github.com/zhansliu/writemdict/blob/master/fileformat.md)、[js-mdict](https://github.com/terasum/js-mdict)、[css-tree](https://github.com/csstree/csstree)、[iframe](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe)。

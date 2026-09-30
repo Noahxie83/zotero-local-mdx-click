@@ -17,6 +17,10 @@ Source: https://github.com/terasum/js-mdict/tree/v6.0.6
 - pako 2.1.0 — MIT and Zlib, https://github.com/nodeca/pako
 - parse5 7.3.0 — MIT, https://github.com/inikulin/parse5
 - entities (pinned in package-lock.json) — BSD-2-Clause, https://github.com/fb55/entities
+- css-tree 3.1.0 — MIT, https://github.com/csstree/csstree (parser, walker and generator imports; no lexer/data bundle)
+- source-map-js (pinned in package-lock.json) — BSD-3-Clause, https://github.com/7rulnik/source-map-js
+
+css-tree's mdn-data dependency is installed for development but is not bundled by the parser/walker/generator imports used here.
 
 The build copies these license texts into the XPI `licenses/` directory.
 

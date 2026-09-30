@@ -14,7 +14,18 @@
     <html:p id="local-mdx-status" role="status"/>
     <html:p>扫描所选文件夹当前层的 MDX 文件。加入新词典后点击“刷新词典列表”。</html:p>
     <html:p>仅为当前选中的词典建立词目索引。词典只在本机读取，无需翻译账号。</html:p>
-    <html:p>首版显示文字释义和例句；暂不读取 MDD 中的图片、音频。</html:p>
+    <html:label>显示方式：<html:select id="local-mdx-mode"><html:option value="original">词典原有排版（样式、图片、字体与发音）</html:option><html:option value="text">简洁文字排版</html:option></html:select></html:label>
+    <html:h3>当前词典的配套资源</html:h3>
+    <html:p>自动关联同目录的同名 .mdd、.1.mdd、.2.mdd 等分卷，同时读取词条引用的外置资源。不同名称或不同目录的资源包可以手动添加。</html:p>
+    <html:p>
+      <html:button id="local-mdx-choose-mdd" type="button">添加 MDD 文件 / 分卷…</html:button>
+      <html:button id="local-mdx-choose-resource-folder" type="button">选择外置资源文件夹…</html:button>
+      <html:button id="local-mdx-reset-resources" type="button">恢复自动关联</html:button>
+    </html:p>
+    <html:p id="local-mdx-extra-mdd" style="overflow-wrap:anywhere"/>
+    <html:p id="local-mdx-resource-folder" style="overflow-wrap:anywhere"/>
+    <html:p id="local-mdx-resource-status" role="status"/>
+    <html:p>资源选择按词典分别保存。点击发音图标或音标播放本地音频；SPX 等需要额外解码的格式当前可能无法播放。词典自带脚本不运行，因此脚本控制的特殊功能可能无法呈现。</html:p>
     <html:p>如同时启用 Hover Translate Eudic 的点击取词，建议在其设置中关闭点击取词，避免两个弹窗同时出现。</html:p>
   </groupbox>
 </vbox>

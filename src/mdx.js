@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// MDX v1/v2 container reader. This module never evaluates dictionary HTML or JS.
+// MDX/MDD v1/v2 container reader. No dictionary HTML or JS is evaluated here.
 import { Inflate } from "pako";
 import lzo from "./vendor/lzo1x.ts";
 import { ripemd128 } from "./vendor/ripemd128.ts";
@@ -125,10 +125,10 @@ function decodeKeyInfo(bytes) {
   return out;
 }
 
-export class MDXDictionary {
+class MDictContainer {
   static async open(source) {
     ensure(source && typeof source.read === "function" && Number.isSafeInteger(source.size) && source.size >= 24, "无法读取词典文件");
-    const dict = new MDXDictionary(source);
+    const dict = new this(source);
     await dict._open();
     return dict;
   }
@@ -173,12 +173,13 @@ export class MDXDictionary {
     const encryption = this.header.Encrypted || "0";
     const encryptionBits = encryption.toLowerCase() === "no" ? 0 : Number(encryption);
     ensure(encryptionBits === 0 || (encryptionBits === 2 && version >= 2), "暂不支持需要密码的 MDX 词典");
-    const encoding = (this.header.Encoding || "UTF-8").toUpperCase().replaceAll("_", "-");
+    // MDD key names are UTF-16LE even when its header advertises UTF-8.
+    const encoding = (this._binary ? "UTF-16LE" : this.header.Encoding || "UTF-8").toUpperCase().replaceAll("_", "-");
     const decoderName = encoding === "UTF-16" ? "utf-16le" : ["GBK", "GB2312"].includes(encoding) ? "gb18030" : encoding;
     try { this._decoder = new TextDecoder(decoderName); } catch { throw new Error(`MDX: 不支持词典编码 ${encoding}`); }
     this._unit = decoderName.toLowerCase().startsWith("utf-16") ? 2 : 1;
     this._caseSensitive = this.header.KeyCaseSensitive === "Yes";
-    this._stripKey = this.header.StripKey !== "No";
+    this._stripKey = !this._binary && this.header.StripKey !== "No";
     this.title = (this.header.Title || "").replace(/<[^>]*>/g, "").trim() || "本地 MDX 词典";
 
     const modern = version >= 2;
@@ -207,14 +208,16 @@ export class MDXDictionary {
     let keyEntrySum = 0;
     for (let i = 0; i < keyBlockCount; i++) {
       const entries = ki.num(width);
+      const bounds = [];
       for (let j = 0; j < 2; j++) {
         const chars = ki.num(modern ? 2 : 1);
-        ki.take((chars + (modern ? 1 : 0)) * this._unit);
+        bounds.push(this._decoder.decode(ki.take(chars * this._unit)));
+        if (modern) ki.take(this._unit);
       }
       const packed = ki.num(width);
       const unpacked = ki.num(width);
       ensure(packed >= 8 && packed <= MAX_BLOCK && unpacked <= MAX_BLOCK, "关键词块长度无效");
-      keyBlocks.push({ entries, packed, unpacked, at: keyBlocksAt + keyPackedSum });
+      keyBlocks.push({ entries, packed, unpacked, at: keyBlocksAt + keyPackedSum, first: bounds[0], last: bounds[1] });
       keyPackedSum += packed;
       keyEntrySum += entries;
     }
@@ -243,6 +246,12 @@ export class MDXDictionary {
     }
     ensure(packedTotal === recordPackedSize && at + packedTotal <= this.source.size, "释义数据总长度不一致");
     this._rawTotal = rawTotal;
+    this._keyBlocks = keyBlocks;
+    this._width = width;
+    this.stats = { version, encoding, entries: this.count, keyBlocks: keyBlockCount, recordBlocks: recordBlockCount, fileSize: this.source.size };
+    // Resource archives can contain hundreds of thousands of audio paths.
+    // Retain only block metadata until a resource in that block is requested.
+    if (this._binary) return;
 
     const entries = [];
     let previous = -1;
@@ -266,7 +275,6 @@ export class MDXDictionary {
       if (i + 1 < entries.length && entries[i].start < entries[i + 1].start) end = entries[i + 1].start;
       entries[i].end = end;
     }
-    this.stats = { version, encoding, entries: this.count, keyBlocks: keyBlockCount, recordBlocks: recordBlockCount, fileSize: this.source.size };
   }
 
   async _recordBlock(index) {
@@ -294,9 +302,9 @@ export class MDXDictionary {
     try { return await job; } finally { this._pending.delete(index); }
   }
 
-  async _entryHTML(entry) {
+  async _entryBytes(entry, limit = MAX_ENTRY) {
     const length = entry.end - entry.start;
-    ensure(length >= 0 && length <= MAX_ENTRY, "单个词条超过初版支持的 16 MB 限制");
+    ensure(length >= 0 && length <= limit, "单个词条或资源超过读取大小限制");
     let lo = 0;
     let hi = this._records.length;
     while (lo < hi) {
@@ -314,7 +322,11 @@ export class MDXDictionary {
       written += slice.length;
     }
     ensure(written === length, "词条释义跨块读取不完整");
-    return this._decoder.decode(result).replace(/\0+$/, "");
+    return result;
+  }
+
+  async _entryHTML(entry) {
+    return this._decoder.decode(await this._entryBytes(entry)).replace(/\0+$/, "");
   }
 
   async lookup(word) {
@@ -354,5 +366,85 @@ export class MDXDictionary {
   clearCache() {
     this._cache.clear();
     this._cacheBytes = 0;
+  }
+}
+
+export class MDXDictionary extends MDictContainer {}
+
+// Slash, root-marker and case differences are common between HTML and MDD.
+// Keep punctuation and directories; dictionary headword normalization must not
+// be applied to a resource name.
+export function resourceKey(path) {
+  return String(path).normalize('NFC').replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
+}
+
+export class MDDArchive extends MDictContainer {
+  constructor(source) {
+    super(source);
+    this._binary = true;
+    this._keyCache = new Map();
+    this._keyPending = new Map();
+    this._keyCacheBytes = 0;
+  }
+
+  async _resourceKeys(index) {
+    if (this._keyCache.has(index)) {
+      const cached = this._keyCache.get(index);
+      this._keyCache.delete(index); this._keyCache.set(index, cached);
+      return cached.entries;
+    }
+    if (this._keyPending.has(index)) return this._keyPending.get(index);
+    const pending = (async () => {
+      const block = this._keyBlocks[index];
+      const cur = new Cursor(unpack(await this._read(block.at, block.packed), block.unpacked));
+      const entries = [];
+      let previous = -1;
+      for (let i = 0; i < block.entries; i++) {
+        const start = cur.num(this._width);
+        const headword = this._decoder.decode(cur.zeroTerminated(2));
+        ensure(start >= previous && start < this._rawTotal, 'MDD 资源偏移无效');
+        previous = start;
+        entries.push({ headword, key: resourceKey(headword), start, end: 0 });
+      }
+      ensure(cur.at === cur.bytes.length, 'MDD 资源索引含未识别数据');
+      const cost = block.unpacked * 4; // Account for decoded strings and objects.
+      if (cost <= MAX_CACHE_BYTES) {
+        this._keyCache.set(index, { entries, cost }); this._keyCacheBytes += cost;
+        while (this._keyCacheBytes > MAX_CACHE_BYTES) {
+          const oldest = this._keyCache.keys().next().value;
+          this._keyCacheBytes -= this._keyCache.get(oldest).cost;
+          this._keyCache.delete(oldest);
+        }
+      }
+      return entries;
+    })();
+    this._keyPending.set(index, pending);
+    try { return await pending; } finally { this._keyPending.delete(index); }
+  }
+
+  async lookupBytes(path) {
+    const key = resourceKey(path);
+    // Bounds prioritize likely blocks. A second pass also supports archives
+    // whose producer uses a different collation from JavaScript string order.
+    const candidates = [], remaining = [];
+    for (let i = 0; i < this._keyBlocks.length; i++) {
+      const block = this._keyBlocks[i];
+      (key >= resourceKey(block.first) && key <= resourceKey(block.last) ? candidates : remaining).push(i);
+    }
+    for (const index of [...candidates, ...remaining]) {
+      const entries = await this._resourceKeys(index);
+      const entry = entries.find(item => item.key === key);
+      if (!entry) continue;
+      let end = entries.find(item => item.start > entry.start)?.start;
+      for (let next = index + 1; end == null && next < this._keyBlocks.length; next++) {
+        end = (await this._resourceKeys(next)).find(item => item.start > entry.start)?.start;
+      }
+      return this._entryBytes({ ...entry, end: end ?? this._rawTotal }, 64 * 1024 * 1024);
+    }
+    return null;
+  }
+
+  clearCache() {
+    super.clearCache(); this._keyCache.clear(); this._keyCacheBytes = 0;
   }
 }

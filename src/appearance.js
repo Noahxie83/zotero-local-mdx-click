@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-// All dictionary styles are ours. Dictionary CSS, scripts and external assets
-// are deliberately not loaded into the PDF reader.
+// Popup chrome and the optional text fallback. Original dictionary CSS is
+// loaded only inside its own sandboxed iframe by native-render.js.
 export const popupCSS = `
   :host { color-scheme: light dark; }
   * { box-sizing: border-box; }

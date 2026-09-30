@@ -18,6 +18,8 @@ for (const [src, dest] of [
   ['node_modules/pako/LICENSE', 'licenses/pako.txt'],
   ['node_modules/parse5/LICENSE', 'licenses/parse5.txt'],
   ['node_modules/entities/LICENSE', 'licenses/entities.txt'],
+  ['node_modules/css-tree/LICENSE', 'licenses/css-tree.txt'],
+  ['node_modules/source-map-js/LICENSE', 'licenses/source-map-js.txt'],
   ['src/vendor/lzo1x.ts', 'licenses/lzo1x-source.ts'],
   ['src/vendor/NOTICE.md', 'licenses/lzo1x-NOTICE.md'],
   ['src/vendor/ripemd128.ts', 'licenses/ripemd128-source.ts'],

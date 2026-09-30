@@ -2,12 +2,20 @@
 import { MDXDictionary } from './mdx.js';
 import { wordAtPoint } from './word-at-point.js';
 import { createCard, renderDefinition, element } from './render.js';
+import { LocalResources, MAX_RESOURCE } from './resources.js';
+import { ResourceScope, prepareNativeDefinition, mountNativeDefinition } from './native-render.js';
+
+const basename = path => path.split(/[\\/]/).pop();
+const dirname = path => {
+  const at = Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'));
+  return path.slice(0, at === 0 || (at === 2 && /^[a-z]:/i.test(path)) ? at + 1 : at);
+};
 
 export function createApp(env, pluginID) {
   const { Zotero, IOUtils, ChromeUtils, Cu } = env;
   const pref = 'localMDXClick.';
   let stopped = false, timer, dictionaryPromise, dictionaryPath, generation = 0, folderEpoch = 0;
-  let dictionaries = [], loadedDictionary;
+  let dictionaries = [], loadedDictionary, loadedResources, resourcesPromise;
   let status = '尚未选择词典。';
   const sessions = new Map(), toolbarButtons = new Set(), selectors = new Set(), preferenceWindows = new Set();
   const getPath = () => Zotero.Prefs.get(pref + 'path') || '';
@@ -15,6 +23,11 @@ export function createApp(env, pluginID) {
   const enabled = () => Zotero.Prefs.get(pref + 'enabled') !== false;
   const errorText = e => String(e?.message || e);
   const log = e => Zotero.logError(e);
+  const getMode = () => Zotero.Prefs.get(pref + 'displayMode') === 'text' ? 'text' : 'original';
+  const configurations = () => {
+    try { return JSON.parse(Zotero.Prefs.get(pref + 'resources') || '{}'); } catch { return {}; }
+  };
+  const resourceOptions = () => configurations()[getPath()] || {};
 
   function fillSelect(select) {
     const signature = dictionaries.map(d => d.path).join('\n');
@@ -55,8 +68,41 @@ export function createApp(env, pluginID) {
       fillSelect(doc.getElementById('local-mdx-select'));
       doc.getElementById('local-mdx-status').textContent = status;
       doc.getElementById('local-mdx-enabled').checked = enabled();
+      doc.getElementById('local-mdx-mode').value = getMode();
+      const options = resourceOptions();
+      doc.getElementById('local-mdx-resource-folder').textContent = options.folder || '使用 MDX 同目录的资源';
+      doc.getElementById('local-mdx-extra-mdd').textContent = options.extraArchives?.length ? options.extraArchives.map(basename).join('、') : '未手动添加分卷（同名 MDD 会自动关联）';
+      doc.getElementById('local-mdx-resource-status').textContent = loadedResources ? `已关联 ${loadedResources.archives.length} 个 MDD 文件，按需读取其中资源。` : '查询时自动查找配套 MDD 和文件夹资源。';
       } catch { preferenceWindows.delete(win); }
     }
+  }
+
+  async function loadResources() {
+    if (resourcesPromise) return resourcesPromise;
+    const token = generation;
+    const guard = () => { if (stopped || token !== generation) throw new Error('词典选择已变更。'); };
+    const fs = {
+      dirname, basename,
+      list: async path => { guard(); return IOUtils.getChildren(path); },
+      stat: async path => { guard(); return IOUtils.stat(path); },
+      source: async path => {
+        guard(); const stat = await IOUtils.stat(path);
+        if (stat.type !== 'regular') throw new Error('资源包不是可读取的文件。');
+        return { size: stat.size, read: async (offset, length) => { guard(); return IOUtils.read(path, { offset, maxBytes: length }); } };
+      },
+      readFile: async path => {
+        guard(); const stat = await IOUtils.stat(path);
+        if (stat.type !== 'regular' || stat.size > MAX_RESOURCE) throw new Error('资源文件过大或无法读取。');
+        return IOUtils.read(path, { maxBytes: MAX_RESOURCE });
+      },
+    };
+    const pending = LocalResources.open({ mdxPath: getPath(), ...resourceOptions(), fs });
+    resourcesPromise = pending;
+    try {
+      const resources = await pending;
+      if (stopped || token !== generation) { resources.close(); throw new Error('词典选择已变更。'); }
+      loadedResources = resources; updateUI(); return resources;
+    } catch (e) { if (resourcesPromise === pending) resourcesPromise = undefined; throw e; }
   }
 
   async function loadDictionary() {
@@ -104,6 +150,7 @@ export function createApp(env, pluginID) {
     if (path && !dictionaries.some(d => d.path === path)) throw new Error('该词典不在当前文件夹列表中，请刷新词典列表。');
     generation++;
     loadedDictionary?.clearCache(); loadedDictionary = undefined;
+    loadedResources?.close(); loadedResources = undefined; resourcesPromise = undefined;
     dictionaryPromise = undefined; dictionaryPath = undefined;
     Zotero.Prefs.set(pref + 'path', path || '');
     for (const s of sessions.values()) if (s !== keepSession) { try { s.close(); } catch {} }
@@ -130,7 +177,7 @@ export function createApp(env, pluginID) {
       if (stopped || epoch !== folderEpoch) return dictionaries.slice();
       found.sort((a, b) => a.name.localeCompare(b.name)); dictionaries = found;
       Zotero.Prefs.set(pref + 'folder', folder);
-      const next = found.find(d => d.path === getPath()) || found.find(d => /牛津|oxford/i.test(d.name)) || found[0];
+      const next = found.find(d => d.path === getPath()) || found[0];
       // Refresh invalidates an index too: the same file may have been replaced.
       selectDictionary(next?.path || '');
       return dictionaries.slice();
@@ -161,9 +208,30 @@ export function createApp(env, pluginID) {
     if (await picker.show() !== picker.returnOK || stopped) return;
     const path = picker.file;
     Zotero.Prefs.set(pref + 'path', path);
-    const folder = path.slice(0, Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/')));
+    const folder = dirname(path);
     try { await scanFolder(folder); if (getPath()) await loadDictionary(); }
     catch (e) { log(e); env.Services.prompt.alert(parent, '本地词典', errorText(e)); }
+  }
+
+  async function chooseResources(parent, type) {
+    if (!getPath()) { await chooseFile(parent); if (!getPath()) return; }
+    const targetPath = getPath();
+    const { FilePicker } = ChromeUtils.importESModule('chrome://zotero/content/modules/filePicker.mjs');
+    const picker = new FilePicker();
+    picker.init(parent || Zotero.getMainWindow(), type === 'folder' ? '选择当前词典的外置资源文件夹' : '选择额外 MDD 文件或分卷（可多选）', type === 'folder' ? picker.modeGetFolder : picker.modeOpenMultiple);
+    if (type !== 'folder') picker.appendFilter('MDD 资源文件', '*.mdd');
+    if (await picker.show() !== picker.returnOK || stopped) return;
+    const config = configurations(), options = config[targetPath] || {};
+    if (type === 'folder') options.folder = picker.file;
+    else options.extraArchives = [...new Set([...(options.extraArchives || []), ...picker.files])];
+    config[targetPath] = options;
+    Zotero.Prefs.set(pref + 'resources', JSON.stringify(config));
+    if (getPath() === targetPath) selectDictionary(targetPath);
+  }
+
+  function resetResources() {
+    const config = configurations(); delete config[getPath()];
+    Zotero.Prefs.set(pref + 'resources', JSON.stringify(config)); selectDictionary(getPath());
   }
 
   function attach(view, win) {
@@ -175,12 +243,19 @@ export function createApp(env, pluginID) {
       target.addEventListener(name, fn, capture);
       listeners.push(() => target.removeEventListener(name, fn, capture));
     };
-    const close = () => { request++; try { card?.host.remove(); } catch {} card = undefined; };
+    const close = () => {
+      request++;
+      try { card?.cleanup?.(); } catch {}
+      try { card?.host.remove(); } catch {}
+      card = undefined;
+    };
     const inside = event => card && event.composedPath().includes(card.host);
     const show = async (word, x, y) => {
       close(); const ticket = request;
       card = createCard(doc, x, y, word, close);
       const current = card;
+      const disposers = []; let scope;
+      current.cleanup = () => { disposers.forEach(dispose => { try { dispose(); } catch {} }); scope?.close(); };
       fillSelect(current.selector);
       const selectedPath = getPath();
       current.selector.addEventListener('change', () => {
@@ -192,9 +267,35 @@ export function createApp(env, pluginID) {
         const results = await dictionary.lookup(word);
         if (stopped || ticket !== request || getPath() !== selectedPath || !current.host.isConnected) return;
         current.body.replaceChildren();
-        if (!results.length) current.body.textContent = `未找到“${word}”。首版按词典词目查询，不自动还原词形。`;
+        if (!results.length) current.body.textContent = `未找到“${word}”。按词典词目查询，不自动还原词形。`;
+        let resources, resourceError;
+        if (getMode() === 'original' && results.length) {
+          try { resources = await loadResources(); scope = new ResourceScope(resources, win); }
+          catch (e) { resourceError = errorText(e); }
+        }
         for (const result of results.slice(0, 12)) {
+          if (stopped || ticket !== request || !current.host.isConnected) { scope?.close(); return; }
           const section = element(doc, 'section');
+          if (scope) {
+            try {
+              const plan = await prepareNativeDefinition(result.html, scope);
+              if (ticket !== request || !current.host.isConnected) { scope.close(); return; }
+              current.body.style.padding = '0';
+              current.body.append(section);
+              disposers.push(mountNativeDefinition(doc, section, plan, scope, {
+                onEntry: entry => { void show(entry, x, y).catch(log); },
+                onStatus: message => { if (ticket === request) current.footer.textContent = message; },
+                onResize: () => { if (ticket === request) current.position(); }, onClose: close,
+                onError: e => {
+                  if (ticket !== request || !current.host.isConnected) return;
+                  section.style.padding = '14px 19px';
+                  section.replaceChildren(renderDefinition(doc, result.html));
+                  current.footer.textContent = '原有排版显示失败，已改用文字排版'; current.footer.title = errorText(e);
+                },
+              }));
+              continue;
+            } catch (e) { resourceError = errorText(e); log(e); }
+          }
           const definition = renderDefinition(doc, result.html);
           if (result.headword.toLowerCase() !== word.toLowerCase() &&
               !definition.querySelector('.dict-h,.dict-hw,.dict-headword,.dict-hwrap h2')) {
@@ -204,7 +305,10 @@ export function createApp(env, pluginID) {
           section.append(definition);
           current.body.append(section);
         }
-        current.footer.textContent = getPath().split(/[\\/]/).pop();
+        if (ticket !== request || !current.host.isConnected) return;
+        const issues = scope?.missing.size || resources?.errors.size || 0;
+        current.footer.textContent = basename(getPath()) + (resourceError ? ' · 资源读取失败，显示文字排版' : issues ? ' · 部分资源未能读取' : getMode() === 'original' ? ' · 词典原有排版' : ' · 简洁文字排版');
+        current.footer.title = resourceError || [...(scope?.missing || []), ...(resources?.errors || [])].slice(0, 30).join('\n');
       } catch (e) {
         if (ticket === request && getPath() === selectedPath && current.host.isConnected) current.body.textContent = errorText(e);
         log(e);
@@ -292,7 +396,7 @@ export function createApp(env, pluginID) {
       else if (getPath()) {
         // Preserve a configuration from an earlier single-file build.
         const path = getPath();
-        await scanFolder(path.slice(0, Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/')))).catch(log);
+        await scanFolder(dirname(path)).catch(log);
       }
     },
     stop() {
@@ -304,6 +408,7 @@ export function createApp(env, pluginID) {
       for (const button of toolbarButtons) { try { button.remove(); } catch {} }
       for (const select of selectors) { try { select.remove(); } catch {} }
       loadedDictionary?.clearCache(); loadedDictionary = undefined;
+      loadedResources?.close(); loadedResources = undefined; resourcesPromise = undefined;
       toolbarButtons.clear(); selectors.clear(); preferenceWindows.clear(); dictionaryPromise = undefined;
     },
     mountPreferences(win) {
@@ -313,9 +418,15 @@ export function createApp(env, pluginID) {
       win.document.getElementById('local-mdx-refresh').onclick = () => scanFolder().catch(log);
       win.document.getElementById('local-mdx-select').onchange = event => selectDictionary(event.target.value);
       win.document.getElementById('local-mdx-enabled').onchange = event => setEnabled(event.target.checked);
+      win.document.getElementById('local-mdx-mode').onchange = event => {
+        Zotero.Prefs.set(pref + 'displayMode', event.target.value); dismissAll(); updateUI();
+      };
+      win.document.getElementById('local-mdx-choose-resource-folder').onclick = () => chooseResources(win, 'folder').catch(log);
+      win.document.getElementById('local-mdx-choose-mdd').onclick = () => chooseResources(win, 'mdd').catch(log);
+      win.document.getElementById('local-mdx-reset-resources').onclick = resetResources;
       if (getPath()) loadDictionary().catch(log);
     },
-    loadDictionary, chooseDictionary, chooseFile, scanReaders, scanFolder, selectDictionary,
+    loadDictionary, loadResources, chooseDictionary, chooseFile, scanReaders, scanFolder, selectDictionary,
     getDictionaries: () => dictionaries.slice(), getPath,
   };
 }
