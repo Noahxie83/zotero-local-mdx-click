@@ -153,16 +153,6 @@ Dictionaries/
 
 </details>
 
-## 质量与验证
-
-**1.1.2** 修复了 LZO 输出边界、词目别名判断、目录切换失败后的状态保留、资源读取失败后的回退，以及 Speex 累计时长控制，并优化了资源读取与缓存。
-
-- **33 项自动化回归通过**：覆盖 MDX/MDD、LZO、CSS、资源回退、取消与缓存、划选、批注适配及 Speex。
-- **Zotero 10.0.3 隔离环境验证通过**：覆盖高亮/下划线保存、重开保留、只读状态、分屏菜单和原菜单恢复。
-- [GitHub Actions](https://github.com/Noahxie83/zotero-local-mdx-click/actions/workflows/build.yml) · [验证记录与覆盖范围](docs/REVIEW_FIXES_1.1.2.md)
-
-以上为已完成的验证记录；真实词典发音、第三方私有格式及其他扩展组合尚未全面实测。
-
 ## 开发与构建
 
 开发需要 Node.js；插件运行无需 Node.js 或 Python。
