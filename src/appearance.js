@@ -88,6 +88,7 @@ export const popupCSS = `
     --pron-color: var(--uk); display: inline-block; margin: 0 5px;
     color: var(--pron-color); white-space: nowrap; vertical-align: baseline;
   }
+  .dict-phon-blk { white-space: nowrap; }
   .dict-pron-g-blk:has(.dict-namelabel), .dict-audio-us { --pron-color: var(--us); }
   .dict-pron-g-blk:has(.dict-brelabel), .dict-audio-gb { --pron-color: var(--uk); }
   .dict-phon, .dict-phon-blk, .dict-pron, .dict-ipa {
@@ -137,6 +138,39 @@ export const popupCSS = `
   }
   .dict-unbox h2, .dict-unbox h3 { font-size: 15px; }
   .dict-xr-gs { display: block; margin: 6px 0; font-size: 14px; color: var(--muted); }
+  .dict-xrlabel { margin-right: 5px; }
+  .dict-xr-gs .dict-xr-g-blk, .dict-xr-gs .dict-xr-g, .dict-xr-gs .dict-xh-blk {
+    display: inline; margin: 0; padding: 0;
+  }
+  .dict-xr-gs .dict-xr-g { white-space: nowrap; }
+  .dict-vp-gs {
+    display: block; margin: 11px 0 15px; padding: 8px 11px 3px;
+    background: var(--note); border-radius: 4px;
+  }
+  .dict-vp-gs::before {
+    content: '词形与发音'; display: block; margin-bottom: 3px;
+    color: var(--muted); font-size: 12px; font-weight: 600;
+  }
+  .dict-form-row {
+    display: grid; grid-template-columns: minmax(90px, 30%) minmax(0, 1fr);
+    align-items: start; gap: 6px 12px; margin: 0; padding: 7px 0;
+    border-top: 1px solid var(--border);
+  }
+  .dict-vpform {
+    display: block; margin: 0; padding-top: 1px; color: var(--muted);
+    font-size: 12px; font-style: normal; line-height: 1.45;
+  }
+  .dict-form-row > .dict-vp-g { display: block; min-width: 0; margin: 0; }
+  .dict-form-row > .dict-vp-g:only-child { grid-column: 1 / -1; }
+  .dict-vp-g > .dict-vp {
+    display: block; margin-bottom: 2px; color: var(--definition);
+    font-size: 15px; font-weight: 600; line-height: 1.4;
+  }
+  .dict-vp-g > .dict-pron-gs, .dict-vp-g > .dict-pron {
+    display: flex; flex-wrap: wrap; gap: 2px 10px; font: inherit;
+  }
+  .dict-vp-g .dict-pron-g-blk { margin: 0; }
+  .dict-vp-g .dict-phon, .dict-vp-g .dict-phon-blk { font-size: 14px; line-height: 1.5; }
   .dict-xh, .dict-idm, .dict-pv { color: var(--definition); font-weight: 600; }
   .dict-boxtag, .dict-word-frequency .dict-label {
     display: inline-block; margin: 2px 4px 2px 0; padding: 1px 5px;
@@ -149,6 +183,8 @@ export const popupCSS = `
     .body { padding: 12px 14px 15px; }
     .dict-h, .dict-hw, .dict-headword, .dict-hwrap h2 { font-size: 23px; }
     .dict-pron-g-blk { margin-left: 0; margin-right: 8px; }
+    .dict-form-row { grid-template-columns: minmax(85px, 30%) minmax(0, 1fr); column-gap: 8px; }
+    .dict-vp-g .dict-pron-g-blk { margin: 0; }
   }
   @media (prefers-color-scheme: dark) {
     .card {

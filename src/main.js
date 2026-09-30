@@ -195,8 +195,13 @@ export function createApp(env, pluginID) {
         if (!results.length) current.body.textContent = `未找到“${word}”。首版按词典词目查询，不自动还原词形。`;
         for (const result of results.slice(0, 12)) {
           const section = element(doc, 'section');
-          if (result.headword.toLowerCase() !== word.toLowerCase()) section.append(element(doc, 'strong', result.headword));
-          section.append(renderDefinition(doc, result.html));
+          const definition = renderDefinition(doc, result.html);
+          if (result.headword.toLowerCase() !== word.toLowerCase() &&
+              !definition.querySelector('.dict-h,.dict-hw,.dict-headword,.dict-hwrap h2')) {
+            const heading = element(doc, 'strong', result.headword);
+            heading.className = 'dict-headword'; section.append(heading);
+          }
+          section.append(definition);
           current.body.append(section);
         }
         current.footer.textContent = getPath().split(/[\\/]/).pop();

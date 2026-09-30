@@ -5,11 +5,35 @@ import { popupCSS } from './appearance.js';
 const HTML = 'http://www.w3.org/1999/xhtml';
 const skip = new Set('script style link meta base iframe frame frameset object embed applet template svg math audio video source track img input button select textarea form noscript audio-wr audio-gbs-liju audio-uss-liju audio-brs-liju audio-br-liju audio-gb-liju audio-ams-liju audio-us-liju audio-n_am-liju'.split(' '));
 const safe = new Set('div p span br hr b i em strong u s small sub sup ul ol li dl dt dd blockquote table tbody thead tfoot tr th td ruby rt rp h1 h2 h3 h4 h5 h6'.split(' '));
-const blocks = new Set('entry entry-g h-g top-g sn-gs sn-blk sn-blk-nolist subentry-g x-gs x-g-blk unbox shcut-blk sense sense-g x-g xr-g idm-g pv-g runon-g phrvb-g etym-g note-g def-g examples idioms xr-gs'.split(' '));
+const blocks = new Set('entry entry-g h-g top-g sn-gs sn-blk sn-blk-nolist subentry-g x-gs x-g-blk unbox shcut-blk sense sense-g x-g xr-g idm-g pv-g runon-g phrvb-g etym-g note-g def-g examples idioms xr-gs vp-gs vp-g form-row'.split(' '));
 const classTokens = new Set([
   ...blocks,
-  ...'headword h hw def definition chn cn zh x example phon pos sn num label oxford3000 hkey symbol pron-gs pron-g-blk pron-g phon-blk brelabel namelabel audio-gb audio-us pos-g pos-blk shcut sdsymb sn-g licontent gram-g gram-blk gram xsymb x-wr cf-blk cf cl-blk cl gl-blk gl label-g label-g-blk xh idm pv boxtag pron ipa hwrap word-frequency dcb dcn'.split(' '),
+  ...'headword h hw def definition chn cn zh x example phon pos sn num label oxford3000 hkey symbol pron-gs pron-g-blk pron-g phon-blk brelabel namelabel audio-gb audio-us pos-g pos-blk shcut sdsymb sn-g licontent gram-g gram-blk gram xsymb x-wr cf-blk cf cl-blk cl gl-blk gl label-g label-g-blk xr-g-blk xrlabel xh-blk xh idm pv vp vpform boxtag pron ipa hwrap word-frequency dcb dcn'.split(' '),
 ]);
+
+// Oxford alternates a form label and a spelling/pronunciation group. Make
+// their relationship explicit so wrapping cannot mix two different forms.
+function renderChildren(source) {
+  const children = source.childNodes || [];
+  if (source.tagName !== 'vp-gs') return children;
+  const grouped = [];
+  let label;
+  for (const child of children) {
+    if (child.nodeName === '#text' && !child.value.trim()) continue;
+    if (child.tagName === 'vpform') {
+      if (label) grouped.push(label);
+      label = child;
+    } else if (child.tagName === 'vp-g') {
+      grouped.push({ tagName: 'form-row', childNodes: label ? [label, child] : [child] });
+      label = undefined;
+    } else {
+      if (label) { grouped.push(label); label = undefined; }
+      grouped.push(child);
+    }
+  }
+  if (label) grouped.push(label);
+  return grouped;
+}
 
 function retainListNumber(source, target, attribute) {
   const value = source.attrs?.find(attr => attr.name === attribute)?.value;
@@ -36,7 +60,7 @@ export function renderDefinition(doc, html) {
     const { source, target, depth } = stack.pop();
     if (depth > 100) continue;
     const pending = [];
-    for (const child of source.childNodes || []) {
+    for (const child of renderChildren(source)) {
       if (++count > 60000) throw new Error('词条结构过于复杂，暂不能显示。');
       if (child.nodeName === '#text') {
         target.appendChild(doc.createTextNode(child.value));
@@ -44,8 +68,11 @@ export function renderDefinition(doc, html) {
       }
       const tag = child.tagName?.replace(/^xhtml:/, '');
       if (!tag || skip.has(tag)) continue;
+      const classes = (child.attrs?.find(a => a.name === 'class')?.value || '').split(/\s+/);
+      // This script-dependent navigation repeats the real NOUN/VERB headings.
+      if (classes.includes('cixing_tiaozhuan')) continue;
       const node = element(doc, safe.has(tag) ? tag : blocks.has(tag) ? 'div' : 'span');
-      const tokens = [tag, ...(child.attrs?.find(a => a.name === 'class')?.value || '').split(/\s+/)];
+      const tokens = [tag, ...classes];
       for (const token of tokens) {
         if (classTokens.has(token)) node.classList.add('dict-' + token);
       }

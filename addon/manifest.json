@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "本地 MDX 点击查词",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "在 Zotero PDF 阅读器中单击英文单词，查询本机 MDX 词典。",
   "author": "Noahxie83",
   "applications": {
