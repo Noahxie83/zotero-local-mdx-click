@@ -1,0 +1,20 @@
+<vbox onload="Zotero.LocalMDXClick.mountPreferences(window)">
+  <groupbox>
+    <html:h2>本地 MDX 点击查词</html:h2>
+    <html:p>选择词典文件夹，导入其中的所有 .mdx 词典，再选择一部用于查词。</html:p>
+    <html:label><html:input id="local-mdx-enabled" type="checkbox"/>启用点击查词</html:label>
+    <html:p>
+      <html:button id="local-mdx-choose" type="button">选择词典文件夹…</html:button>
+      <html:button id="local-mdx-choose-file" type="button">选择 MDX 文件…</html:button>
+      <html:button id="local-mdx-refresh" type="button">刷新词典列表</html:button>
+    </html:p>
+    <html:p id="local-mdx-folder" style="overflow-wrap:anywhere"/>
+    <html:label>当前查询词典：<html:select id="local-mdx-select" style="max-width:100%"/></html:label>
+    <html:p id="local-mdx-path" style="overflow-wrap:anywhere"/>
+    <html:p id="local-mdx-status" role="status"/>
+    <html:p>扫描所选文件夹当前层的 MDX 文件。加入新词典后点击“刷新词典列表”。</html:p>
+    <html:p>仅为当前选中的词典建立词目索引。词典只在本机读取，无需翻译账号。</html:p>
+    <html:p>首版显示文字释义和例句；暂不读取 MDD 中的图片、音频。</html:p>
+    <html:p>如同时启用 Hover Translate Eudic 的点击取词，建议在其设置中关闭点击取词，避免两个弹窗同时出现。</html:p>
+  </groupbox>
+</vbox>

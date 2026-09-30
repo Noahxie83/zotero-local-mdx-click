@@ -1,0 +1,11 @@
+node_modules/
+dist/
+addon/content/plugin.js
+addon/licenses/
+addon/LICENSE
+addon/THIRD_PARTY.md
+*.mdx
+*.mdd
+*.xpi
+.DS_Store
+Thumbs.db

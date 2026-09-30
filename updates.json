@@ -1,0 +1,19 @@
+{
+  "addons": {
+    "local-mdx-click@noahx.local": {
+      "updates": [
+        {
+          "version": "0.1.0",
+          "update_link": "https://github.com/Noahxie83/zotero-local-mdx-click/releases/download/v0.1.0/local-mdx-click-0.1.0.xpi",
+          "update_hash": "sha256:ba9321578115d2b3b397b7507a3998ac7dba067a0c9e79cf21556b1cdd94db43",
+          "applications": {
+            "zotero": {
+              "strict_min_version": "10.0",
+              "strict_max_version": "10.0.*"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
