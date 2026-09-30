@@ -2,7 +2,7 @@
 import { MDXDictionary } from './mdx.js';
 import { wordAtPoint } from './word-at-point.js';
 import { queryFromText, readSelection, selectionSignature } from './selection-query.js';
-import { replaceSelectionMenu, renderSelectionTools } from './selection-menu.js';
+import { replaceSelectionMenu, renderSelectionTools, saveSelectionAnnotation } from './selection-menu.js';
 import { createCard, renderDefinition, element } from './render.js';
 import { LocalResources, MAX_RESOURCE } from './resources.js';
 import { ResourceScope, prepareNativeDefinition, mountNativeDefinition } from './native-render.js';
@@ -242,7 +242,7 @@ export function createApp(env, pluginID) {
     Zotero.Prefs.set(pref + 'resources', JSON.stringify(config)); selectDictionary(getPath());
   }
 
-  function attach(view, win, internal) {
+  function attach(view, win, internal, readerWindow) {
     if (!win?.document?.body || sessions.has(win) || stopped) return;
     const doc = win.document;
     let down, card, request = 0, moved = false, selectionTimer, menu, passthroughSelection = false;
@@ -272,10 +272,10 @@ export function createApp(env, pluginID) {
           color: Zotero.Prefs.get(pref + 'annotationColor') || '#ffd400',
           setColor: color => Zotero.Prefs.set(pref + 'annotationColor', color),
           readOnly: !!internal?._annotationManager?._readOnly,
-          add: async (type, color) => {
-            const saved = await view._onAddAnnotation({ ...snapshot, position: JSON.parse(JSON.stringify(snapshot.position)), type, color }, false);
-            if (!saved) throw new Error('文献只读或当前阅读器不能保存批注。');
-          },
+          add: (type, color) => saveSelectionAnnotation({
+            view, readerWindow, Cu, annotation: snapshot, type, color,
+            readOnly: !!internal?._annotationManager?._readOnly,
+          }),
           onStatus: message => { if (current.host.isConnected) current.footer.textContent = message; },
         });
       }
@@ -460,7 +460,7 @@ export function createApp(env, pluginID) {
         for (const view of [internal?._primaryView, internal?._secondaryView]) {
           const wrapped = view?._iframeWindow;
           const win = wrapped && Cu.unwaiveXrays(wrapped);
-          if ((win?.wrappedJSObject || win)?.PDFViewerApplication) attach(view, win, internal);
+          if ((win?.wrappedJSObject || win)?.PDFViewerApplication) attach(view, win, internal, reader._iframeWindow);
         }
       } catch { /* A reader may be destroyed during the scan. */ }
     }

@@ -6,6 +6,28 @@ export const ANNOTATION_COLORS = [
   ['紫色', '#a28ae5'], ['洋红', '#e56eee'], ['橙色', '#f19837'], ['灰色', '#aaaaaa'],
 ];
 
+export async function saveSelectionAnnotation({ view, readerWindow, Cu, annotation, type, color, readOnly = false }) {
+  if (readOnly) throw new Error('此文献只读，不能保存批注。');
+  if (!['highlight', 'underline'].includes(type)) throw new Error('不支持此批注类型。');
+  if (typeof color !== 'string' || !/^#[\da-f]{6}$/i.test(color)) throw new Error('批注颜色无效，请重新选择颜色。');
+  if (!readerWindow || typeof Cu?.cloneInto !== 'function' || typeof view?._onAddAnnotation !== 'function') {
+    throw new Error('当前阅读器不能保存批注，请重新打开 PDF。');
+  }
+  // The plugin and reader execute in different Gecko compartments. A plain
+  // plugin object can hide even its color property from the reader. Follow
+  // Zotero's host bridge: clone the complete data into the reader window.
+  const data = JSON.parse(JSON.stringify(annotation));
+  data.type = type; data.color = color;
+  if (!data.sortIndex || !data.position || !Number.isInteger(data.position.pageIndex)
+      || !Array.isArray(data.position.rects) || !data.position.rects.length) {
+    throw new Error('选区位置或排序信息不完整，请重新选择文字。');
+  }
+  const payload = Cu.cloneInto(data, readerWindow);
+  const saved = await view._onAddAnnotation(payload, false);
+  if (!saved) throw new Error('文献只读或当前阅读器不能保存批注。');
+  return saved;
+}
+
 // Intercept only the reader's text-selection popup callback, never its
 // annotation storage, highlight tool or other popup callbacks.
 export function replaceSelectionMenu(view, { enabled, onPopup, onError }) {

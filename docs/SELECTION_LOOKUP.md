@@ -1,4 +1,4 @@
-# 划选查询与批注菜单实现（1.1）
+# 划选查询与批注菜单实现（1.1.1）
 
 ## 读取选区
 
@@ -27,6 +27,10 @@ Unicode 兼容规范化后统一常见英文连字符和弯引号，保留普通
 同一弹窗提供 Zotero 的 8 个颜色、`highlight` 和 `underline` 两种动作，没有添加笔记。颜色选择保存为插件偏好；单纯查词或选择颜色不创建批注。
 
 点击动作时，复制阅读器提供的 `text`、`sortIndex`、`pageLabel` 和 `position` 等选区数据，只覆盖 `type` 与 `color`，调用 view 的 `_onAddAnnotation(annotation, false)`。不自行计算高亮矩形或直接写数据库。保存期间/成功后禁用本弹窗的动作按钮，失败时显示错误并恢复按钮。只读状态禁用颜色和动作。
+
+1.1.1 在 `saveSelectionAnnotation()` 中先验证颜色、位置和排序字段，再以 `Cu.cloneInto(data, reader._iframeWindow)` 复制整份批注数据，包括嵌套位置数组。调用目标是阅读器应用所在窗口，而非只在插件环境中 `JSON.parse` 后直接传对象。这与 Zotero host 向 reader 传递数据的方式一致，针对 1.1.0 用户反馈的 `Missing 'color' property` 修复跨环境对象传递；本轮仍未运行保存测试。
+
+参考：[Zotero reader host](https://github.com/zotero/zotero/blob/main/chrome/content/zotero/xpcom/reader.js)、[Gecko 跨环境对象传递](https://firefox-source-docs.mozilla.org/dom/scriptSecurity/index.html#unprivileged-to-privileged-code)。
 
 关闭自动划选查词、没有 MDX 或选区超过查词长度时，仍可只显示批注工具。选择“Zotero 自带菜单”时暂停划选自动查询以避免两个菜单同时显示，普通单击查询保留。
 
