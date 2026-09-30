@@ -49,6 +49,16 @@ export const popupCSS = `
   }
   select:hover { border-color: var(--muted); }
   select:disabled { opacity: .6; cursor: default; }
+  .query-alternatives {
+    flex: 0 0 auto; padding: 7px 17px; border-bottom: 1px solid var(--border);
+    background: var(--note); color: var(--definition); font-size: 12px;
+    line-height: 1.5; overflow-wrap: anywhere;
+  }
+  .query-alternatives[hidden] { display: none; }
+  .query-match {
+    padding: 6px 10px; margin-bottom: 7px; border-radius: 4px;
+    background: var(--note); color: var(--muted); font-size: 12px; line-height: 1.5;
+  }
   .body {
     min-height: 70px; padding: 14px 19px 17px; overflow: auto;
     overscroll-behavior: contain; scrollbar-width: thin;

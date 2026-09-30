@@ -2,7 +2,9 @@
   <groupbox>
     <html:h2>本地 MDX 点击查词</html:h2>
     <html:p>选择词典文件夹，导入其中的所有 .mdx 词典，再选择一部用于查词。</html:p>
-    <html:label><html:input id="local-mdx-enabled" type="checkbox"/>启用点击查词</html:label>
+    <html:label><html:input id="local-mdx-enabled" type="checkbox"/>启用本地查词（点击 / 划选）</html:label>
+    <html:label><html:input id="local-mdx-selection-enabled" type="checkbox"/>划选单词或词组后自动查询</html:label>
+    <html:p>用普通指针拖选完整词或词组，松开鼠标查询。遇到 transfor- 换行 mation，请选中两部分；保留连字符和拼接写法都会查询。最多 256 字符、16 个词，按本地词目查询。</html:p>
     <html:p>
       <html:button id="local-mdx-choose" type="button">选择词典文件夹…</html:button>
       <html:button id="local-mdx-choose-file" type="button">选择 MDX 文件…</html:button>

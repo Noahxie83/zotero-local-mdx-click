@@ -115,7 +115,8 @@ export function createCard(doc, x, y, word, close) {
   const selector = element(doc, 'select'); selector.setAttribute('aria-label', '选择查询词典');
   const choiceLabel = element(doc, 'span', '词典'); choiceLabel.className = 'dictionary-label';
   choice.append(choiceLabel, selector);
-  card.append(header, choice, body, footer); root.append(style, card); doc.body.append(host);
+  const queries = element(doc, 'div'); queries.className = 'query-alternatives'; queries.hidden = true;
+  card.append(header, choice, queries, body, footer); root.append(style, card); doc.body.append(host);
   const position = () => {
     const rect = host.getBoundingClientRect();
     const left = Math.max(8, Math.min(x + 12, win.innerWidth - rect.width - 8));
@@ -123,5 +124,5 @@ export function createCard(doc, x, y, word, close) {
     host.style.left = left + 'px'; host.style.top = top + 'px';
   };
   position();
-  return { host, body, footer, selector, position };
+  return { host, body, footer, selector, queries, position };
 }

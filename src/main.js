@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 import { MDXDictionary } from './mdx.js';
 import { wordAtPoint } from './word-at-point.js';
+import { queryFromText, readSelection, selectionSignature } from './selection-query.js';
 import { createCard, renderDefinition, element } from './render.js';
 import { LocalResources, MAX_RESOURCE } from './resources.js';
 import { ResourceScope, prepareNativeDefinition, mountNativeDefinition } from './native-render.js';
@@ -21,6 +22,7 @@ export function createApp(env, pluginID) {
   const getPath = () => Zotero.Prefs.get(pref + 'path') || '';
   const getFolder = () => Zotero.Prefs.get(pref + 'folder') || '';
   const enabled = () => Zotero.Prefs.get(pref + 'enabled') !== false;
+  const selectionEnabled = () => Zotero.Prefs.get(pref + 'selectionEnabled') !== false;
   const errorText = e => String(e?.message || e);
   const log = e => Zotero.logError(e);
   const getMode = () => Zotero.Prefs.get(pref + 'displayMode') === 'text' ? 'text' : 'original';
@@ -50,7 +52,7 @@ export function createApp(env, pluginID) {
         if (!button.isConnected) { toolbarButtons.delete(button); continue; }
         button.textContent = enabled() ? '本地词典 ✓' : '本地词典';
         button.setAttribute('aria-pressed', String(enabled()));
-        button.title = getPath() ? '单击切换点击查词；右键更换词典文件夹' : '选择本地词典文件夹';
+        button.title = getPath() ? '单击开关本地查词（点击 / 划选）；右键更换词典文件夹' : '选择本地词典文件夹';
       } catch { toolbarButtons.delete(button); }
     }
     for (const select of selectors) {
@@ -68,6 +70,7 @@ export function createApp(env, pluginID) {
       fillSelect(doc.getElementById('local-mdx-select'));
       doc.getElementById('local-mdx-status').textContent = status;
       doc.getElementById('local-mdx-enabled').checked = enabled();
+      doc.getElementById('local-mdx-selection-enabled').checked = selectionEnabled();
       doc.getElementById('local-mdx-mode').value = getMode();
       const options = resourceOptions();
       doc.getElementById('local-mdx-resource-folder').textContent = options.folder || '使用 MDX 同目录的资源';
@@ -250,7 +253,10 @@ export function createApp(env, pluginID) {
       card = undefined;
     };
     const inside = event => card && event.composedPath().includes(card.host);
-    const show = async (word, x, y) => {
+    const show = async (input, x, y) => {
+      const query = typeof input === 'string' ? queryFromText(input) : input;
+      if (!query) return;
+      const word = query.text;
       close(); const ticket = request;
       card = createCard(doc, x, y, word, close);
       const current = card;
@@ -260,14 +266,34 @@ export function createApp(env, pluginID) {
       const selectedPath = getPath();
       current.selector.addEventListener('change', () => {
         selectDictionary(current.selector.value, sessions.get(win));
-        void show(word, x, y).catch(log);
+        void show(query, x, y).catch(log);
       });
       try {
         const dictionary = await loadDictionary();
-        const results = await dictionary.lookup(word);
-        if (stopped || ticket !== request || getPath() !== selectedPath || !current.host.isConnected) return;
+        const isCurrent = () => !stopped && ticket === request && getPath() === selectedPath && current.host.isConnected;
+        if (!isCurrent()) return;
+        const unique = new Map(), attempts = [], lookupErrors = [];
+        for (const candidate of query.candidates) {
+          let found;
+          try { found = await dictionary.lookup(candidate); }
+          catch (e) { lookupErrors.push(candidate + '：' + errorText(e)); log(e); }
+          if (!isCurrent()) return;
+          attempts.push(candidate + (found ? found.length ? ' ✓' : '（未收录）' : '（读取失败）'));
+          for (const result of found || []) {
+            const key = result.headword + '\0' + result.html;
+            const previous = unique.get(key);
+            if (previous) previous.matches.push(candidate);
+            else unique.set(key, { ...result, matches: [candidate] });
+          }
+        }
+        const results = [...unique.values()];
+        current.queries.hidden = query.candidates.length === 1;
+        current.queries.textContent = '已查询：' + attempts.join(' / ');
+        current.queries.title = '保留连字符与拼接写法分别查询；相同词条合并显示。';
         current.body.replaceChildren();
-        if (!results.length) current.body.textContent = `未找到“${word}”。按词典词目查询，不自动还原词形。`;
+        if (!results.length) current.body.textContent = lookupErrors.length
+          ? '部分查询读取失败：\n' + lookupErrors.join('\n')
+          : `未找到“${word}”。当前词典未收录上述写法或词组；查询完整词目，不做整句机器翻译。`;
         let resources, resourceError;
         if (getMode() === 'original' && results.length) {
           try { resources = await loadResources(); scope = new ResourceScope(resources, win); }
@@ -276,6 +302,13 @@ export function createApp(env, pluginID) {
         for (const result of results.slice(0, 12)) {
           if (stopped || ticket !== request || !current.host.isConnected) { scope?.close(); return; }
           const section = element(doc, 'section');
+          const matchLabel = () => {
+            if (query.candidates.length > 1) {
+              const label = element(doc, 'div', '词目：' + result.headword + ' · 命中：' + result.matches.join(' / '));
+              label.className = 'query-match'; section.append(label);
+            }
+          };
+          matchLabel();
           if (scope) {
             try {
               const plan = await prepareNativeDefinition(result.html, scope);
@@ -283,13 +316,13 @@ export function createApp(env, pluginID) {
               current.body.style.padding = '0';
               current.body.append(section);
               disposers.push(mountNativeDefinition(doc, section, plan, scope, {
-                onEntry: entry => { void show(entry, x, y).catch(log); },
+                onEntry: entry => { void show(queryFromText(entry, 'entry'), x, y).catch(log); },
                 onStatus: message => { if (ticket === request) current.footer.textContent = message; },
                 onResize: () => { if (ticket === request) current.position(); }, onClose: close,
                 onError: e => {
                   if (ticket !== request || !current.host.isConnected) return;
                   section.style.padding = '14px 19px';
-                  section.replaceChildren(renderDefinition(doc, result.html));
+                  section.replaceChildren(); matchLabel(); section.append(renderDefinition(doc, result.html));
                   current.footer.textContent = '原有排版显示失败，已改用文字排版'; current.footer.title = errorText(e);
                 },
               }));
@@ -307,10 +340,11 @@ export function createApp(env, pluginID) {
         }
         if (ticket !== request || !current.host.isConnected) return;
         const issues = scope?.missing.size || resources?.errors.size || 0;
-        current.footer.textContent = basename(getPath()) + (resourceError ? ' · 资源读取失败，显示文字排版' : issues ? ' · 部分资源未能读取' : getMode() === 'original' ? ' · 词典原有排版' : ' · 简洁文字排版');
+        current.footer.textContent = basename(getPath()) + (resourceError ? ' · 资源读取失败，显示文字排版' : issues ? ' · 部分资源未能读取' : getMode() === 'original' ? ' · 词典原有排版' : ' · 简洁文字排版')
+          + (lookupErrors.length ? ' · 部分写法查询失败' : '') + (results.length > 12 ? ` · 显示前 12/${results.length} 条` : '');
         const resourceDetails = [...(scope?.missing || []), ...(resources?.errors || [])].slice(0, 30);
         if (scope?.optionalMissing.size) resourceDetails.push('字体备用路径未找到（该组仍有其他字体来源）：\n' + [...scope.optionalMissing].slice(0, 16).join('\n'));
-        current.footer.title = resourceError || resourceDetails.join('\n');
+        current.footer.title = [resourceError, ...resourceDetails, ...lookupErrors].filter(Boolean).join('\n');
       } catch (e) {
         if (ticket === request && getPath() === selectedPath && current.host.isConnected) current.body.textContent = errorText(e);
         log(e);
@@ -325,20 +359,30 @@ export function createApp(env, pluginID) {
       if (view._tool?.type && view._tool.type !== 'pointer') return;
       if (event.target.closest?.('input,textarea,button,a,select,[contenteditable="true"],.annotationLayer,.textAnnotation')) return;
       if (!event.target.closest?.('.page')) return;
-      down = { x: event.clientX, y: event.clientY, id: event.pointerId, time: Date.now() };
+      down = { x: event.clientX, y: event.clientY, id: event.pointerId, time: Date.now(), selection: selectionSignature(win, view) };
     }, true);
     on(win, 'pointermove', event => {
       if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) > 5) moved = true;
     }, true);
     on(win, 'pointerup', async event => {
       const origin = down; down = undefined;
-      if (!origin || moved || event.button !== 0 || event.pointerId !== origin.id || Date.now() - origin.time > 650) return;
+      if (!origin || event.button !== 0 || event.pointerId !== origin.id) return;
       if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !enabled()) return;
-      if (Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > 5) return;
+      if (view.action?.type === 'drag') return;
+      const wasMoved = moved || Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > 5;
+      const ticket = request;
       // Zotero's native text selection may stop bubbling pointerup. Capture it,
-      // then let the reader finish updating its selection before querying.
-      await Promise.resolve();
-      if (win.getSelection()?.isCollapsed === false || view._isSelectionCollapsed?.() === false) return;
+      // then wait a task so all reader handlers finish updating the selection.
+      await new Promise(resolve => win.setTimeout(resolve, 0));
+      if (stopped || ticket !== request || !enabled() || !getPath()) return;
+      const selected = readSelection(win, view);
+      if (selected.selected) {
+        if (selectionEnabled() && selected.query && (wasMoved || selectionSignature(win, view) !== origin.selection)) {
+          void show(selected.query, event.clientX, event.clientY).catch(log);
+        }
+        return;
+      }
+      if (wasMoved || Date.now() - origin.time > 650 || view._isSelectionCollapsed?.() === false) return;
       const word = wordAtPoint(win, event.clientX, event.clientY, view);
       if (word) void show(word, event.clientX, event.clientY).catch(log);
     }, true);
@@ -420,6 +464,9 @@ export function createApp(env, pluginID) {
       win.document.getElementById('local-mdx-refresh').onclick = () => scanFolder().catch(log);
       win.document.getElementById('local-mdx-select').onchange = event => selectDictionary(event.target.value);
       win.document.getElementById('local-mdx-enabled').onchange = event => setEnabled(event.target.checked);
+      win.document.getElementById('local-mdx-selection-enabled').onchange = event => {
+        Zotero.Prefs.set(pref + 'selectionEnabled', event.target.checked); dismissAll(); updateUI();
+      };
       win.document.getElementById('local-mdx-mode').onchange = event => {
         Zotero.Prefs.set(pref + 'displayMode', event.target.value); dismissAll(); updateUI();
       };
