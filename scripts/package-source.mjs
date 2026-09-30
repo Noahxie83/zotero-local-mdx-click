@@ -19,6 +19,7 @@ async function walk(dir, prefix = '') {
 }
 await walk(root);
 await mkdir(path.join(root, 'dist'), { recursive: true });
-const out = path.join(root, 'dist', `local-mdx-click-source-${manifest.version}.zip`);
+const suffix = process.argv.includes('--docs') ? '-docs' : '';
+const out = path.join(root, 'dist', `local-mdx-click-source-${manifest.version}${suffix}.zip`);
 await writeFile(out, zipSync(files, { level: 6 }));
 console.log(out);

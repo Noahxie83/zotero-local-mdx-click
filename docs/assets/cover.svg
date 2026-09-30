@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="460" viewBox="0 0 1280 460" role="img" aria-labelledby="title desc">
+<title id="title">Local MDX：本地词典，跟着论文走。</title><desc id="desc">Zotero 10 本地词典插件，点击和划选查词、MDX/MDD 分卷、原有排版与离线 Speex。</desc>
+<defs><pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="#dbe5ed" stroke-width=".6"/></pattern></defs>
+<rect width="1280" height="460" rx="18" fill="#fcfcf9"/><rect x="768" width="512" height="460" rx="18" fill="#eff6fb"/><rect x="768" width="512" height="460" fill="url(#grid)"/>
+<g font-family="Segoe UI,Microsoft YaHei,sans-serif" fill="#102b46">
+<text x="64" y="68" font-size="18" letter-spacing="2" fill="#087bd0">LOCAL MDX · ZOTERO 10</text>
+<text x="60" y="166" font-size="50" font-weight="700">本地词典，</text><text x="60" y="232" font-size="50" font-weight="700">跟着论文走。</text>
+<text x="64" y="283" font-size="19" fill="#586d7f">点击一个词，或划选一组词。留在论文里，读懂它。</text>
+<g font-size="15" fill="#087bd0"><rect x="64" y="325" width="105" height="34" rx="6" fill="#eaf3fb"/><text x="78" y="348">点击 / 划选</text><rect x="181" y="325" width="155" height="34" rx="6" fill="#eaf3fb"/><text x="195" y="348">MDX / MDD 分卷</text><rect x="348" y="325" width="136" height="34" rx="6" fill="#eaf3fb"/><text x="363" y="348">内置 Speex</text></g>
+<text x="64" y="411" font-size="14" fill="#586d7f">OFFLINE · YOUR DICTIONARIES · ORIGINAL STYLES</text>
+</g>
+<g transform="translate(807 62)"><rect width="407" height="332" rx="12" fill="white" stroke="#dbe5ed"/><g font-family="Georgia,serif" fill="#102b46"><text x="30" y="65" font-size="40" font-weight="700">transfor-</text><text x="30" y="109" font-size="40" font-weight="700">mation</text></g><path d="M248 61v42h76" fill="none" stroke="#087bd0" stroke-width="2"/><path d="m317 97 7 6-7 6" fill="none" stroke="#087bd0" stroke-width="2"/>
+<rect x="28" y="144" width="349" height="48" rx="6" fill="#eff6fb"/><text x="43" y="174" font-family="Segoe UI,sans-serif" font-size="22" fill="#087bd0">transformation</text>
+<text x="29" y="230" font-family="Microsoft YaHei,sans-serif" font-size="18" fill="#102b46">保留连字符 + 拼接断行处</text><text x="29" y="264" font-family="Microsoft YaHei,sans-serif" font-size="16" fill="#586d7f">分别查询候选，合并相同词条</text><text x="29" y="306" font-family="Segoe UI,sans-serif" font-size="12" fill="#586d7f">1.1.2  ·  33 REGRESSION TESTS PASSED</text></g></svg>
