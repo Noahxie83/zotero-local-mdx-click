@@ -1,4 +1,4 @@
-# 划选查询与批注菜单实现（1.1.1）
+# 划选查询与批注菜单实现（1.1.2）
 
 ## 读取选区
 
@@ -28,7 +28,7 @@ Unicode 兼容规范化后统一常见英文连字符和弯引号，保留普通
 
 点击动作时，复制阅读器提供的 `text`、`sortIndex`、`pageLabel` 和 `position` 等选区数据，只覆盖 `type` 与 `color`，调用 view 的 `_onAddAnnotation(annotation, false)`。不自行计算高亮矩形或直接写数据库。保存期间/成功后禁用本弹窗的动作按钮，失败时显示错误并恢复按钮。只读状态禁用颜色和动作。
 
-1.1.1 在 `saveSelectionAnnotation()` 中先验证颜色、位置和排序字段，再以 `Cu.cloneInto(data, reader._iframeWindow)` 复制整份批注数据，包括嵌套位置数组。调用目标是阅读器应用所在窗口，而非只在插件环境中 `JSON.parse` 后直接传对象。这与 Zotero host 向 reader 传递数据的方式一致，针对 1.1.0 用户反馈的 `Missing 'color' property` 修复跨环境对象传递；本轮仍未运行保存测试。
+1.1.1 在 `saveSelectionAnnotation()` 中先验证颜色、位置和排序字段，再以 `Cu.cloneInto(data, reader._iframeWindow)` 复制整份批注数据，包括嵌套位置数组。调用目标是阅读器应用所在窗口，而非只在插件环境中 `JSON.parse` 后直接传对象。这与 Zotero host 向 reader 传递数据的方式一致，针对 1.1.0 用户反馈的 `Missing 'color' property` 修复跨环境对象传递。1.1.1 当时未运行保存验收；1.1.2 已完成下文的独立 Zotero 持久化验证。
 
 参考：[Zotero reader host](https://github.com/zotero/zotero/blob/main/chrome/content/zotero/xpcom/reader.js)、[Gecko 跨环境对象传递](https://firefox-source-docs.mozilla.org/dom/scriptSecurity/index.html#unprivileged-to-privileged-code)。
 
@@ -42,7 +42,7 @@ Unicode 兼容规范化后统一常见英文连字符和弯引号，保留普通
 
 ## 本地检查建议
 
-交付前未运行测试或 Zotero 内运行验收。用户安装后可以检查：
+1.1.2 在全新独立配置和文献库的 Zotero 10.0.3 中，用自制 PDF 验证了红色高亮、蓝色下划线的落库字段及重新打开后的保留；只读时按钮禁用，分屏中菜单可用，切回自带菜单和停止插件后两个视图的原菜单恢复。验证脚本通过阅读器选区接口设置自制 PDF 的真实文字矩形、点击插件按钮，没有直接写入批注数据库；它不能覆盖所有人工拖选方式或其他扩展组合。自动化另有候选生成、对象复制和后续插件包装回调的回归用例。安装后可按需检查自己的文献和词典：
 
 1. 普通单击词语与切换词典。
 2. 拖选完整 `transfor-` / `mation` 两部分，弹窗应列出 `transfor-mation` 与 `transformation` 的查询情况。

@@ -1,13 +1,13 @@
 {
   "name": "zotero-local-mdx-click",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "private": true,
   "type": "module",
   "license": "GPL-3.0-or-later",
   "scripts": {
     "build": "node scripts/build.mjs",
     "pack:source": "node scripts/package-source.mjs",
-    "test": "node --test tests/mdx.test.mjs"
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "css-tree": "3.1.0",

@@ -91,7 +91,34 @@ export class ResourceScope {
     this.urls = new Map(); this.pending = new Map(); this.missing = new Set();
     this.optionalMissing = new Set();
     this.audioPending = new Map();
+    this.readPending = new Map();
     this.bytes = 0; this.closed = false;
+  }
+
+  _resourceURL(normalized, resource) {
+    if (this.closed) throw new Error('查词窗口已关闭。');
+    const speex = isOggSpeex(resource.bytes);
+    if (this.urls.has(normalized)) return { url: this.urls.get(normalized), speex };
+    if (this.urls.size >= 256 || this.bytes + resource.bytes.length > 96 * 1024 * 1024) {
+      return { url: '', reason: resource.key + '（超过窗口资源限额）' };
+    }
+    this.bytes += resource.bytes.length;
+    const url = this.makeURL ? this.makeURL(resource) : this.win.URL.createObjectURL(new this.win.Blob([resource.bytes], { type: resource.mime }));
+    this.urls.set(normalized, url); return { url, speex };
+  }
+
+  _readResource(key) {
+    const normalized = resourceKey(key);
+    if (!this.readPending.has(normalized)) {
+      const pending = Promise.resolve().then(() => {
+        if (this.closed) throw new Error('查词窗口已关闭。');
+        return this.resources.read(key);
+      });
+      this.readPending.set(normalized, pending);
+      const release = () => { if (this.readPending.get(normalized) === pending) this.readPending.delete(normalized); };
+      pending.then(release, release);
+    }
+    return this.readPending.get(normalized);
   }
   async url(reference, base = '', { required = true } = {}) {
     if (this.closed) throw new Error('查词窗口已关闭。');
@@ -103,15 +130,9 @@ export class ResourceScope {
     const normalized = resourceKey(key);
     if (!this.pending.has(normalized)) {
       this.pending.set(normalized, (async () => {
-        const resource = await this.resources.read(key);
+        const resource = await this._readResource(key);
         if (!resource) return { url: '', reason: key };
-        if (this.closed) throw new Error('查词窗口已关闭。');
-        if (this.urls.size >= 256 || this.bytes + resource.bytes.length > 96 * 1024 * 1024) {
-          return { url: '', reason: key + '（超过窗口资源限额）' };
-        }
-        this.bytes += resource.bytes.length;
-        const url = this.makeURL ? this.makeURL(resource) : this.win.URL.createObjectURL(new this.win.Blob([resource.bytes], { type: resource.mime }));
-        this.urls.set(normalized, url); return { url };
+        return this._resourceURL(normalized, resource);
       })());
     }
     const result = await this.pending.get(normalized);
@@ -123,23 +144,35 @@ export class ResourceScope {
     const key = localReference(reference);
     if (!key) return '';
     const normalized = 'audio:' + resourceKey(key);
+    // A prior regular resource request already owns the same bytes/URL.
+    const original = resourceKey(key);
+    if (!/\.spx$/i.test(key) && this.pending.has(original)) {
+      const result = await this.pending.get(original);
+      if (this.closed) throw new Error('查词窗口已关闭。');
+      if (!result.speex) {
+        if (!result.url) this.missing.add(result.reason || key);
+        return result.url;
+      }
+    }
     if (!this.audioPending.has(normalized)) {
       this.audioPending.set(normalized, (async () => {
-        const resource = await this.resources.read(key);
+        const resource = await this._readResource(key);
         if (!resource) { this.missing.add(key); return ''; }
         if (this.closed) throw new Error('查词窗口已关闭。');
-        if (!/\.spx$/i.test(key) && !isOggSpeex(resource.bytes)) return this.url(key);
+        if (!/\.spx$/i.test(key) && !isOggSpeex(resource.bytes)) {
+          const result = this._resourceURL(original, resource);
+          this.pending.set(original, Promise.resolve(result));
+          if (!result.url) this.missing.add(result.reason);
+          return result.url;
+        }
         const bytes = await decodeSpeex(resource.bytes, {
           cancelled: () => this.closed,
           yieldControl: this.win ? () => new Promise(resolve => this.win.setTimeout(resolve, 0)) : undefined,
           randomFill: this.win ? buffer => this.win.crypto.getRandomValues(buffer) : undefined,
         });
-        if (this.closed) throw new Error('查词窗口已关闭。');
-        if (this.urls.size >= 256 || this.bytes + bytes.length > 96 * 1024 * 1024) throw new Error('解码发音超过查词窗口资源限额。');
-        this.bytes += bytes.length;
-        const converted = { bytes, mime: 'audio/wav' };
-        const url = this.makeURL ? this.makeURL(converted) : this.win.URL.createObjectURL(new this.win.Blob([bytes], { type: converted.mime }));
-        this.urls.set(normalized, url); return url;
+        const result = this._resourceURL(normalized, { key, bytes, mime: 'audio/wav' });
+        if (!result.url) throw new Error('解码发音超过查词窗口资源限额。');
+        return result.url;
       })());
     }
     return this.audioPending.get(normalized);
@@ -147,7 +180,7 @@ export class ResourceScope {
   close() {
     this.closed = true;
     if (!this.makeURL) for (const url of this.urls.values()) { try { this.win.URL.revokeObjectURL(url); } catch {} }
-    this.urls.clear(); this.pending.clear(); this.audioPending.clear();
+    this.urls.clear(); this.pending.clear(); this.audioPending.clear(); this.readPending.clear();
   }
 }
 

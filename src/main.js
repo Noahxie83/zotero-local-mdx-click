@@ -4,7 +4,7 @@ import { wordAtPoint } from './word-at-point.js';
 import { queryFromText, readSelection, selectionSignature } from './selection-query.js';
 import { replaceSelectionMenu, renderSelectionTools, saveSelectionAnnotation } from './selection-menu.js';
 import { createCard, renderDefinition, element } from './render.js';
-import { LocalResources, MAX_RESOURCE } from './resources.js';
+import { LocalResources, MAX_RESOURCE, ResourceCancelledError } from './resources.js';
 import { ResourceScope, prepareNativeDefinition, mountNativeDefinition } from './native-render.js';
 
 const basename = path => path.split(/[\\/]/).pop();
@@ -16,7 +16,7 @@ const dirname = path => {
 export function createApp(env, pluginID) {
   const { Zotero, IOUtils, ChromeUtils, Cu } = env;
   const pref = 'localMDXClick.';
-  let stopped = false, timer, dictionaryPromise, dictionaryPath, generation = 0, folderEpoch = 0;
+  let stopped = false, timer, dictionaryPromise, dictionaryPath, generation = 0, resourceGeneration = 0, folderEpoch = 0;
   let dictionaries = [], loadedDictionary, loadedResources, resourcesPromise;
   let status = '尚未选择词典。';
   const sessions = new Map(), toolbarButtons = new Set(), selectors = new Set(), preferenceWindows = new Set();
@@ -86,28 +86,28 @@ export function createApp(env, pluginID) {
 
   async function loadResources() {
     if (resourcesPromise) return resourcesPromise;
-    const token = generation;
-    const guard = () => { if (stopped || token !== generation) throw new Error('词典选择已变更。'); };
+    const token = resourceGeneration;
+    const guard = () => { if (stopped || token !== resourceGeneration) throw new ResourceCancelledError('词典或资源配置已变更。'); };
     const fs = {
-      dirname, basename,
-      list: async path => { guard(); return IOUtils.getChildren(path); },
-      stat: async path => { guard(); return IOUtils.stat(path); },
+      dirname, basename, guard,
+      list: async path => { guard(); const result = await IOUtils.getChildren(path); guard(); return result; },
+      stat: async path => { guard(); const result = await IOUtils.stat(path); guard(); return result; },
       source: async path => {
-        guard(); const stat = await IOUtils.stat(path);
+        guard(); const stat = await IOUtils.stat(path); guard();
         if (stat.type !== 'regular') throw new Error('资源包不是可读取的文件。');
-        return { size: stat.size, read: async (offset, length) => { guard(); return IOUtils.read(path, { offset, maxBytes: length }); } };
+        return { size: stat.size, read: async (offset, length) => { guard(); const result = await IOUtils.read(path, { offset, maxBytes: length }); guard(); return result; } };
       },
       readFile: async path => {
-        guard(); const stat = await IOUtils.stat(path);
+        guard(); const stat = await IOUtils.stat(path); guard();
         if (stat.type !== 'regular' || stat.size > MAX_RESOURCE) throw new Error('资源文件过大或无法读取。');
-        return IOUtils.read(path, { maxBytes: MAX_RESOURCE });
+        const result = await IOUtils.read(path, { maxBytes: MAX_RESOURCE }); guard(); return result;
       },
     };
     const pending = LocalResources.open({ mdxPath: getPath(), ...resourceOptions(), fs });
     resourcesPromise = pending;
     try {
       const resources = await pending;
-      if (stopped || token !== generation) { resources.close(); throw new Error('词典选择已变更。'); }
+      if (stopped || token !== resourceGeneration) { resources.close(); throw new ResourceCancelledError('词典或资源配置已变更。'); }
       loadedResources = resources; updateUI(); return resources;
     } catch (e) { if (resourcesPromise === pending) resourcesPromise = undefined; throw e; }
   }
@@ -158,7 +158,7 @@ export function createApp(env, pluginID) {
     if (path && !dictionaries.some(d => d.path === path)) throw new Error('该词典不在当前文件夹列表中，请刷新词典列表。');
     generation++;
     loadedDictionary?.clearCache(); loadedDictionary = undefined;
-    loadedResources?.close(); loadedResources = undefined; resourcesPromise = undefined;
+    invalidateResources();
     dictionaryPromise = undefined; dictionaryPath = undefined;
     Zotero.Prefs.set(pref + 'path', path || '');
     for (const s of sessions.values()) if (s !== keepSession) { try { s.close(); } catch {} }
@@ -167,11 +167,20 @@ export function createApp(env, pluginID) {
     if (path && enabled()) loadDictionary().catch(log);
   }
 
-  async function scanFolder(folder = getFolder()) {
+  function invalidateResources() {
+    resourceGeneration++;
+    loadedResources?.close(); loadedResources = undefined; resourcesPromise = undefined;
+  }
+
+  function refreshResources() {
+    invalidateResources(); dismissAll(); updateUI();
+  }
+
+  async function scanFolder(folder = getFolder(), preferredPath = getPath()) {
     const epoch = ++folderEpoch;
     status = '正在读取词典文件夹…'; updateUI();
     try {
-      if (!folder) { dictionaries = []; status = '尚未选择词典文件夹。'; updateUI(); return []; }
+      if (!folder) { status = '尚未选择词典文件夹。'; updateUI(); return dictionaries.slice(); }
       const stat = await IOUtils.stat(folder);
       if (stat.type !== 'directory') throw new Error('词典文件夹不存在。');
       const children = await IOUtils.getChildren(folder);
@@ -185,13 +194,14 @@ export function createApp(env, pluginID) {
       if (stopped || epoch !== folderEpoch) return dictionaries.slice();
       found.sort((a, b) => a.name.localeCompare(b.name)); dictionaries = found;
       Zotero.Prefs.set(pref + 'folder', folder);
-      const next = found.find(d => d.path === getPath()) || found[0];
+      const next = found.find(d => d.path === preferredPath) || found[0];
       // Refresh invalidates an index too: the same file may have been replaced.
       selectDictionary(next?.path || '');
       return dictionaries.slice();
     } catch (e) {
       if (!stopped && epoch === folderEpoch) {
-        dictionaries = []; selectDictionary('');
+        // Nothing was committed before a complete scan. Keep the last valid
+        // folder, list, selected MDX and its index when a new scan fails.
         status = '无法读取文件夹：' + errorText(e); updateUI();
       }
       throw e;
@@ -215,9 +225,8 @@ export function createApp(env, pluginID) {
     picker.appendFilter('MDX 词典', '*.mdx');
     if (await picker.show() !== picker.returnOK || stopped) return;
     const path = picker.file;
-    Zotero.Prefs.set(pref + 'path', path);
     const folder = dirname(path);
-    try { await scanFolder(folder); if (getPath()) await loadDictionary(); }
+    try { await scanFolder(folder, path); if (getPath()) await loadDictionary(); }
     catch (e) { log(e); env.Services.prompt.alert(parent, '本地词典', errorText(e)); }
   }
 
@@ -234,12 +243,12 @@ export function createApp(env, pluginID) {
     else options.extraArchives = [...new Set([...(options.extraArchives || []), ...picker.files])];
     config[targetPath] = options;
     Zotero.Prefs.set(pref + 'resources', JSON.stringify(config));
-    if (getPath() === targetPath) selectDictionary(targetPath);
+    if (getPath() === targetPath) refreshResources();
   }
 
   function resetResources() {
     const config = configurations(); delete config[getPath()];
-    Zotero.Prefs.set(pref + 'resources', JSON.stringify(config)); selectDictionary(getPath());
+    Zotero.Prefs.set(pref + 'resources', JSON.stringify(config)); refreshResources();
   }
 
   function attach(view, win, internal, readerWindow) {
@@ -533,7 +542,7 @@ export function createApp(env, pluginID) {
       win.document.getElementById('local-mdx-reset-resources').onclick = resetResources;
       if (getPath()) loadDictionary().catch(log);
     },
-    loadDictionary, loadResources, chooseDictionary, chooseFile, scanReaders, scanFolder, selectDictionary,
+    loadDictionary, loadResources, chooseDictionary, chooseFile, chooseResources, resetResources, scanReaders, scanFolder, selectDictionary,
     getDictionaries: () => dictionaries.slice(), getPath,
   };
 }

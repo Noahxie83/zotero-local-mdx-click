@@ -133,12 +133,13 @@ export async function decodeSpeex(bytes, { cancelled = () => false, yieldControl
   // IOUtils may return a typed array from another privileged JS compartment.
   requireValue(bytes?.byteLength > 0 && bytes.byteLength <= MAX_INPUT, 'SPX 文件为空或超过 8 MB 解码限额。');
   if (!(bytes instanceof Uint8Array)) bytes = new Uint8Array(bytes);
-  const streams = parseOgg(bytes), output = []; let format, totalBytes = 0;
+  const streams = parseOgg(bytes), output = []; let format, totalBytes = 0, totalFrames = 0;
   for (const stream of streams) {
     requireValue(!cancelled(), '发音查询已关闭。');
     const info = header(stream);
     if (format) requireValue(format.rate === info.rate && format.channels === info.channels, '连续 Speex 音轨的采样率或声道不一致。');
     format = info;
+    requireValue(stream.granule < 0 || totalFrames + stream.granule <= info.rate * 30, 'SPX 整个文件的累计发音超过 30 秒解码限额。');
     const api = await instance(randomFill);
     requireValue(api.spx_version(info.mode) === info.bitstream, 'Speex 位流版本与附带解码器不兼容。');
     let decoder = 0, input = 0, pcm = 0;
@@ -160,6 +161,9 @@ export async function decodeSpeex(bytes, { cancelled = () => false, yieldControl
         requireValue(count >= 0 && count <= frameSize * info.frames, 'Speex 音频帧损坏，无法解码。');
         const length = count * info.channels * 2;
         samples += count;
+        // Include prior logical streams while decoding, allowing only one
+        // packet of codec padding until the stream's final granule is applied.
+        requireValue(totalFrames + Math.max(0, samples - lookahead) <= info.rate * 30 + frameSize * info.frames, 'SPX 整个文件的累计发音超过 30 秒解码限额。');
         requireValue(samples <= info.rate * 30 + lookahead + frameSize * info.frames && totalBytes + samples * info.channels * 2 <= MAX_PCM, 'SPX 解码后的发音过长或超过 16 MB 限额。');
         if (length) chunks.push(new Uint8Array(api.memory.buffer, pcm, length).slice());
         if (yieldControl && i % 16 === 0) await yieldControl();
@@ -168,7 +172,9 @@ export async function decodeSpeex(bytes, { cancelled = () => false, yieldControl
       const frames = stream.granule >= 0 ? Math.min(audible, stream.granule) : audible;
       const length = frames * info.channels * 2;
       requireValue(length > 0, 'Speex 音频没有可播放的采样。');
+      requireValue(totalFrames + frames <= info.rate * 30, 'SPX 整个文件的累计发音超过 30 秒解码限额。');
       output.push(...trimChunks(chunks, lookahead * info.channels * 2, length)); totalBytes += length;
+      totalFrames += frames;
     } finally {
       if (decoder) api.spx_close(decoder);
       if (input) api.spx_free(input);

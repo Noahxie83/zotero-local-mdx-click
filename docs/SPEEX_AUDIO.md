@@ -1,4 +1,4 @@
-# SPX/Speex 发音实现（1.1）
+# SPX/Speex 发音实现（1.1.2）
 
 ## 使用
 
@@ -21,7 +21,7 @@
 
 - 标准 Ogg/Speex，窄带、宽带、超宽带，单/双声道，每包 1–64 帧。
 - 支持依次连接且采样率/声道相同的逻辑流；不支持交错的多个 Speex 音轨。
-- 输入最大 8 MB，单包音频最大 64 KB，每段最长 30 秒，输出 PCM 累计最大 16 MB。
+- 输入最大 8 MB，单包音频最大 64 KB，整个文件累计最长 30 秒（包括连续逻辑流），输出 PCM 累计最大 16 MB。
 - WASM 初始内存 2 MB，上限 16 MB；结果仍受弹窗总资源限额约束。
 - 私有裸 Speex、加密数据、损坏 Ogg、缺失结束页、版本不兼容等给出提示，不尝试猜测参数。
 
@@ -45,6 +45,6 @@ npm run build
 
 ## 交付状态
 
-已完成 C 编译、插件构建和代码审阅。没有运行解码测试或 Zotero 内实际播放，仍需用户安装后检查当前词典的发音，不能把“已经编译”当成播放验收。
+1.1.2 自动化回归使用自制静音 Ogg 流，实际执行内置 WASM 解码并核对 WAV，覆盖窄带单声道、三种模式的双声道/每包三帧、短连续流、累计超时、CRC 损坏及取消。宽带/超宽带用例使用合法窄带 null 子模式和缺省扩展层，验证对应解码器初始化、输出采样率和帧长度；它们不代表全部实际音质模式和立体声参数位流均已测过。详见 [整改记录](REVIEW_FIXES_1.1.2.md)。尚未在 Zotero 中实测真实词典的发音播放，解码测试不等同于播放验收。
 
 格式参考：[Speex Ogg 容器说明](https://www.speex.org/docs/manual/speex-manual/node8.html)、[Ogg framing](https://www.xiph.org/ogg/doc/framing.html)、[Speex 解码 API](https://www.speex.org/docs/manual/speex-manual/node7.html)。

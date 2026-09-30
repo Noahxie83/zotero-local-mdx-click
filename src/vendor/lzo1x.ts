@@ -125,7 +125,7 @@ const lzo1x = function lzo1x() {
       // if (op_end - op < t) return OUTPUT_OVERRUN;
       // if (ip_end - ip < t+3) return INPUT_OVERRUN;
 
-      while (this.op + 3 > this.cbl) {
+      while (this.op + this.t > this.cbl) {
         this.extendBuffer();
       }
 

@@ -143,12 +143,14 @@ class MDictContainer {
     this._cache = new Map();
     this._pending = new Map();
     this._cacheBytes = 0;
+    this._cacheEpoch = 0;
   }
 
   async _read(offset, length) {
     ensure(Number.isSafeInteger(offset) && Number.isSafeInteger(length) && offset >= 0 && length >= 0 && length <= MAX_BLOCK && offset + length <= this.source.size, "读取位置超出词典文件范围");
     const result = await this.source.read(offset, length);
     ensure(ArrayBuffer.isView(result) && result.BYTES_PER_ELEMENT === 1 && result.byteLength === length, "词典文件读取不完整");
+    if (this.lookupStats) { this.lookupStats.sourceReads++; this.lookupStats.bytesRead += result.byteLength; }
     // IOUtils may return a Uint8Array from a different Firefox compartment.
     return new Uint8Array(result.buffer, result.byteOffset, result.byteLength);
   }
@@ -285,10 +287,11 @@ class MDictContainer {
       return bytes;
     }
     if (this._pending.has(index)) return this._pending.get(index);
+    const epoch = this._cacheEpoch;
     const job = (async () => {
       const block = this._records[index];
       const bytes = unpack(await this._read(block.at, block.packed), block.unpacked);
-      if (bytes.length > MAX_CACHE_BYTES) return bytes;
+      if (bytes.length > MAX_CACHE_BYTES || epoch !== this._cacheEpoch) return bytes;
       this._cache.set(index, bytes);
       this._cacheBytes += bytes.length;
       while (this._cacheBytes > MAX_CACHE_BYTES && this._cache.size > 1) {
@@ -299,7 +302,7 @@ class MDictContainer {
       return bytes;
     })();
     this._pending.set(index, job);
-    try { return await job; } finally { this._pending.delete(index); }
+    try { return await job; } finally { if (this._pending.get(index) === job) this._pending.delete(index); }
   }
 
   async _entryBytes(entry, limit = MAX_ENTRY) {
@@ -336,9 +339,7 @@ class MDictContainer {
   async _lookup(word, visited, depth) {
     if (!word) return [];
     const key = this._normalize(word);
-    ensure(depth < 20 && !visited.has(key), "词典内部跳转形成循环或跳转过多");
-    const nextVisited = new Set(visited);
-    nextVisited.add(key);
+    ensure(depth < 20, "词典内部跳转形成循环或跳转过多");
     let entries = this._keys.get(key) || [];
     // Prefer the word as written: "be" should not also show "Be" or "be-".
     // Duplicate exact headwords remain available because MDX uses them for senses.
@@ -353,6 +354,11 @@ class MDictContainer {
     for (const entry of entries) {
       if (seenOffsets.has(entry.start)) continue;
       seenOffsets.add(entry.start);
+      // Normalization merges valid spellings such as Apple/apple or be-/be.
+      // A cycle revisits a record, not a normalized search key. Keep ancestry
+      // local to this branch so different aliases may share a terminal entry.
+      ensure(!visited.has(entry.start), "词典内部跳转形成循环或跳转过多");
+      const nextVisited = new Set(visited); nextVisited.add(entry.start);
       const html = await this._entryHTML(entry);
       const link = html.trim().match(/^@@@LINK=([^\r\n\0]+)\s*$/);
       if (link) results.push(...await this._lookup(link[1].trim(), nextVisited, depth + 1));
@@ -364,6 +370,7 @@ class MDictContainer {
   }
 
   clearCache() {
+    this._cacheEpoch++; this._pending.clear();
     this._cache.clear();
     this._cacheBytes = 0;
   }
@@ -385,6 +392,8 @@ export class MDDArchive extends MDictContainer {
     this._keyCache = new Map();
     this._keyPending = new Map();
     this._keyCacheBytes = 0;
+    this._lookupCache = new Map(); this._lookupCacheBytes = 0;
+    this.lookupStats = { lookups: 0, cacheHits: 0, blocksInspected: 0, keyBlocksDecompressed: 0, keyBytesUnpacked: 0, sourceReads: 0, bytesRead: 0, totalLookupMs: 0 };
   }
 
   async _resourceKeys(index) {
@@ -394,9 +403,11 @@ export class MDDArchive extends MDictContainer {
       return cached.entries;
     }
     if (this._keyPending.has(index)) return this._keyPending.get(index);
+    const epoch = this._cacheEpoch;
     const pending = (async () => {
       const block = this._keyBlocks[index];
       const cur = new Cursor(unpack(await this._read(block.at, block.packed), block.unpacked));
+      this.lookupStats.keyBlocksDecompressed++; this.lookupStats.keyBytesUnpacked += block.unpacked;
       const entries = [];
       let previous = -1;
       for (let i = 0; i < block.entries; i++) {
@@ -408,7 +419,7 @@ export class MDDArchive extends MDictContainer {
       }
       ensure(cur.at === cur.bytes.length, 'MDD 资源索引含未识别数据');
       const cost = block.unpacked * 4; // Account for decoded strings and objects.
-      if (cost <= MAX_CACHE_BYTES) {
+      if (cost <= MAX_CACHE_BYTES && epoch === this._cacheEpoch) {
         this._keyCache.set(index, { entries, cost }); this._keyCacheBytes += cost;
         while (this._keyCacheBytes > MAX_CACHE_BYTES) {
           const oldest = this._keyCache.keys().next().value;
@@ -419,11 +430,24 @@ export class MDDArchive extends MDictContainer {
       return entries;
     })();
     this._keyPending.set(index, pending);
-    try { return await pending; } finally { this._keyPending.delete(index); }
+    try { return await pending; } finally { if (this._keyPending.get(index) === pending) this._keyPending.delete(index); }
   }
 
   async lookupBytes(path) {
     const key = resourceKey(path);
+    const started = Date.now(), epoch = this._cacheEpoch;
+    this.lookupStats.lookups++;
+    try { return await this._lookupBytesKey(key, epoch); }
+    finally { this.lookupStats.totalLookupMs += Math.max(0, Date.now() - started); }
+  }
+
+  async _lookupBytesKey(key, epoch) {
+    if (this._lookupCache.has(key)) {
+      const cached = this._lookupCache.get(key);
+      this._lookupCache.delete(key); this._lookupCache.set(key, cached);
+      this.lookupStats.cacheHits++;
+      return cached.entry ? await this._entryBytes(cached.entry, 64 * 1024 * 1024) : null;
+    }
     // Bounds prioritize likely blocks. A second pass also supports archives
     // whose producer uses a different collation from JavaScript string order.
     const candidates = [], remaining = [];
@@ -432,6 +456,7 @@ export class MDDArchive extends MDictContainer {
       (key >= resourceKey(block.first) && key <= resourceKey(block.last) ? candidates : remaining).push(i);
     }
     for (const index of [...candidates, ...remaining]) {
+      this.lookupStats.blocksInspected++;
       const entries = await this._resourceKeys(index);
       const entry = entries.find(item => item.key === key);
       if (!entry) continue;
@@ -439,12 +464,28 @@ export class MDDArchive extends MDictContainer {
       for (let next = index + 1; end == null && next < this._keyBlocks.length; next++) {
         end = (await this._resourceKeys(next)).find(item => item.start > entry.start)?.start;
       }
-      return this._entryBytes({ ...entry, end: end ?? this._rawTotal }, 64 * 1024 * 1024);
+      const location = { ...entry, end: end ?? this._rawTotal };
+      const bytes = await this._entryBytes(location, 64 * 1024 * 1024);
+      if (epoch === this._cacheEpoch) this._rememberLookup(key, location);
+      return bytes;
     }
+    if (epoch === this._cacheEpoch) this._rememberLookup(key, null);
     return null;
   }
 
+  _rememberLookup(key, entry) {
+    const cost = key.length * 2 + (entry?.headword?.length || 0) * 2 + 128;
+    if (cost > 1024 * 1024) return;
+    if (this._lookupCache.has(key)) this._lookupCacheBytes -= this._lookupCache.get(key).cost;
+    this._lookupCache.delete(key); this._lookupCache.set(key, { entry, cost }); this._lookupCacheBytes += cost;
+    while (this._lookupCache.size > 2048 || this._lookupCacheBytes > 1024 * 1024) {
+      const oldest = this._lookupCache.keys().next().value;
+      this._lookupCacheBytes -= this._lookupCache.get(oldest).cost; this._lookupCache.delete(oldest);
+    }
+  }
+
   clearCache() {
-    super.clearCache(); this._keyCache.clear(); this._keyCacheBytes = 0;
+    super.clearCache(); this._keyCache.clear(); this._keyPending.clear(); this._keyCacheBytes = 0;
+    this._lookupCache.clear(); this._lookupCacheBytes = 0;
   }
 }
