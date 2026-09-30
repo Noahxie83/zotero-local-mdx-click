@@ -116,7 +116,8 @@ export function createCard(doc, x, y, word, close) {
   const choiceLabel = element(doc, 'span', '词典'); choiceLabel.className = 'dictionary-label';
   choice.append(choiceLabel, selector);
   const queries = element(doc, 'div'); queries.className = 'query-alternatives'; queries.hidden = true;
-  card.append(header, choice, queries, body, footer); root.append(style, card); doc.body.append(host);
+  const selectionTools = element(doc, 'div'); selectionTools.className = 'selection-tools'; selectionTools.hidden = true;
+  card.append(header, selectionTools, choice, queries, body, footer); root.append(style, card); doc.body.append(host);
   const position = () => {
     const rect = host.getBoundingClientRect();
     const left = Math.max(8, Math.min(x + 12, win.innerWidth - rect.width - 8));
@@ -124,5 +125,5 @@ export function createCard(doc, x, y, word, close) {
     host.style.left = left + 'px'; host.style.top = top + 'px';
   };
   position();
-  return { host, body, footer, selector, queries, position };
+  return { host, body, footer, selector, choice, queries, selectionTools, position };
 }

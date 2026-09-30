@@ -11,6 +11,7 @@ await build({
   outfile: path.join(root, 'addon/content/plugin.js'),
   bundle: true, format: 'iife', globalName: 'LocalMDXModule',
   platform: 'browser', target: ['firefox140'], legalComments: 'inline',
+  loader: { '.wasm': 'binary' },
 });
 await mkdir(path.join(root, 'addon/licenses'), { recursive: true });
 for (const [src, dest] of [
@@ -24,6 +25,16 @@ for (const [src, dest] of [
   ['src/vendor/NOTICE.md', 'licenses/lzo1x-NOTICE.md'],
   ['src/vendor/ripemd128.ts', 'licenses/ripemd128-source.ts'],
   ['src/vendor/js-mdict-LICENSE', 'licenses/js-mdict-MIT.txt'],
+  ['src/vendor/speex/upstream/COPYING', 'licenses/speex-BSD.txt'],
+  ['src/vendor/speex/assembly-MIT-LICENSE', 'licenses/speex-assembly-MIT.txt'],
+  ['src/vendor/speex/NOTICE.md', 'licenses/speex-NOTICE.md'],
+  ['src/vendor/speex/LLVM-LICENSE', 'licenses/LLVM-LICENSE.txt'],
+  ['src/vendor/speex/WASI-LIBC-LICENSE', 'licenses/WASI-LIBC-LICENSE.txt'],
+  ['src/vendor/speex/WASI-LICENSE-APACHE', 'licenses/WASI-LICENSE-APACHE.txt'],
+  ['src/vendor/speex/WASI-LICENSE-APACHE-LLVM', 'licenses/WASI-LICENSE-APACHE-LLVM.txt'],
+  ['src/vendor/speex/WASI-LICENSE-MIT', 'licenses/WASI-LICENSE-MIT.txt'],
+  ['src/vendor/speex/WASI-MUSL-COPYRIGHT', 'licenses/WASI-MUSL-COPYRIGHT.txt'],
+  ['src/vendor/speex/WASI-CLOUDLIBC-LICENSE', 'licenses/WASI-CLOUDLIBC-LICENSE.txt'],
 ]) await cp(path.join(root, src), path.join(root, 'addon', dest));
 const files = {};
 async function walk(dir, prefix = '') {

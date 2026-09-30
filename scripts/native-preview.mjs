@@ -13,6 +13,7 @@ if (!word || !dictionaryPaths.length) throw new Error('用法：node scripts/nat
 const compiled = await build({
   stdin: { contents: "export {MDXDictionary} from './src/mdx.js'; export {LocalResources} from './src/resources.js'; export {ResourceScope,prepareNativeDefinition} from './src/native-render.js';", resolveDir: root, sourcefile: 'preview-core.js' },
   write: false, bundle: true, platform: 'node', format: 'esm', target: ['node22'], legalComments: 'none',
+  loader: { '.wasm': 'binary' },
 });
 const core = await import('data:text/javascript;base64,' + Buffer.from(compiled.outputFiles[0].text).toString('base64'));
 const handles = new Map();
@@ -80,6 +81,7 @@ const client = await build({
     document.getElementById('reopen').onclick=show;show();
   `, resolveDir: root, sourcefile: 'native-preview-client.js' },
   write: false, bundle: true, format: 'iife', target: ['firefox140'], legalComments: 'inline',
+  loader: { '.wasm': 'binary' },
 });
 const script = client.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
 const output = path.resolve(root, '../原有排版预览-' + version + '.html');

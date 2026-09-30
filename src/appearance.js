@@ -42,6 +42,7 @@ export const popupCSS = `
     padding: 8px 17px; border-bottom: 1px solid var(--border);
   }
   .dictionary-label { color: var(--muted); font-size: 12px; flex: 0 0 auto; }
+  .dictionary-choice[hidden], .body[hidden] { display: none; }
   select {
     flex: 1; min-width: 0; width: 100%; max-width: 100%;
     padding: 4px 7px; border: 1px solid var(--border); border-radius: 4px;
@@ -55,6 +56,24 @@ export const popupCSS = `
     line-height: 1.5; overflow-wrap: anywhere;
   }
   .query-alternatives[hidden] { display: none; }
+  .selection-tools {
+    padding: 8px 17px; background: var(--chrome); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; flex: 0 0 auto;
+  }
+  .selection-tools[hidden] { display: none; }
+  .annotation-colors, .annotation-actions { display: flex; align-items: center; gap: 6px; }
+  .annotation-color {
+    width: 21px; height: 21px; border: 1px solid #0002; border-radius: 4px;
+    background: var(--annotation-color); box-shadow: inset 0 0 0 1px #ffffff30;
+  }
+  .annotation-color:hover { background: var(--annotation-color); opacity: .8; }
+  .annotation-color[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .annotation-actions button {
+    width: auto; height: 28px; padding: 3px 9px; font: 12px/1.5 'Segoe UI','Microsoft YaHei',sans-serif;
+    border: 1px solid var(--border); background: var(--surface); border-radius: 4px;
+  }
+  .selection-tools button:disabled { opacity: .5; cursor: default; }
+  .selection-tools small { color: var(--muted); font-size: 11px; }
   .query-match {
     padding: 6px 10px; margin-bottom: 7px; border-radius: 4px;
     background: var(--note); color: var(--muted); font-size: 12px; line-height: 1.5;

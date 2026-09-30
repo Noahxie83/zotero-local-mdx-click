@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
   "name": "本地 MDX 点击查词",
-  "version": "1.0.0",
-  "description": "在 Zotero PDF 阅读器中点击或划选单词、词组查本地 MDX；查询连字符和断行拼接写法，读取配套 MDD 分卷的样式、图片、字体和音频。",
+  "version": "1.1.0",
+  "description": "在 Zotero PDF 中点击或划选查本地 MDX，整合颜色、高亮、下划线菜单，读取 MDD 分卷，并内置离线 Ogg/Speex 发音解码。",
   "author": "Noahxie83",
   "applications": {
     "zotero": {

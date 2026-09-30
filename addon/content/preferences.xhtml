@@ -4,6 +4,8 @@
     <html:p>选择词典文件夹，导入其中的所有 .mdx 词典，再选择一部用于查词。</html:p>
     <html:label><html:input id="local-mdx-enabled" type="checkbox"/>启用本地查词（点击 / 划选）</html:label>
     <html:label><html:input id="local-mdx-selection-enabled" type="checkbox"/>划选单词或词组后自动查询</html:label>
+    <html:label>划选菜单：<html:select id="local-mdx-selection-menu"><html:option value="integrated">插件查词与批注菜单</html:option><html:option value="native">Zotero 自带菜单</html:option></html:select></html:label>
+    <html:p>插件菜单将查词、8 色选择、高亮和下划线放在同一界面，不显示自带划选菜单。长选区仍可批注；没有“添加笔记”功能。选择自带菜单时暂停划选自动查词，单击查词继续保留。</html:p>
     <html:p>用普通指针拖选完整词或词组，松开鼠标查询。遇到 transfor- 换行 mation，请选中两部分；保留连字符和拼接写法都会查询。最多 256 字符、16 个词，按本地词目查询。</html:p>
     <html:p>
       <html:button id="local-mdx-choose" type="button">选择词典文件夹…</html:button>
@@ -27,7 +29,7 @@
     <html:p id="local-mdx-extra-mdd" style="overflow-wrap:anywhere"/>
     <html:p id="local-mdx-resource-folder" style="overflow-wrap:anywhere"/>
     <html:p id="local-mdx-resource-status" role="status"/>
-    <html:p>资源选择按词典分别保存。点击发音图标或音标播放本地音频；SPX 等需要额外解码的格式当前可能无法播放。词典自带脚本不运行，因此脚本控制的特殊功能可能无法呈现。</html:p>
+    <html:p>资源选择按词典分别保存。点击发音图标或音标播放本地音频；已内置标准 Ogg/SPX 的 Speex 解码器，无需另装程序。词典自带脚本不运行，因此脚本控制的特殊功能可能无法呈现。</html:p>
     <html:p>如同时启用 Hover Translate Eudic 的点击取词，建议在其设置中关闭点击取词，避免两个弹窗同时出现。</html:p>
   </groupbox>
 </vbox>

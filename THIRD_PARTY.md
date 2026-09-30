@@ -24,7 +24,28 @@ css-tree's mdn-data dependency is installed for development but is not bundled b
 
 The build copies these license texts into the XPI `licenses/` directory.
 
-## Development dependencies
+## Embedded Speex decoder
+
+Speex 1.2.1 — BSD-style license. Original sources, copyright notices, the
+decoder interface, compiled WASM and reproduction notes are in
+`src/vendor/speex/`. Source snapshot:
+https://github.com/caitunai/speex/tree/cbabf6e8213ad6eb2c984c2904996ad529536b1b/internal/csrc/speex
+
+The amalgamation include list is adapted from that repository's MIT-licensed
+`speex_all.c`. This project does not use its npm JavaScript wrapper. The runtime
+decoder was compiled with wasi-sdk 34.0, linking WASI libc/compiler runtime
+components under Apache-2.0 with LLVM exception, MIT and BSD notices supplied
+in the XPI's `licenses/` and the source tree. Full provenance and rebuild steps:
+`src/vendor/speex/NOTICE.md` and `scripts/build-speex.mjs`.
+
+References: https://www.speex.org/docs/,
+https://github.com/WebAssembly/wasi-sdk,
+https://github.com/WebAssembly/wasi-libc,
+https://github.com/llvm/llvm-project.
+
+No user dictionary audio is distributed with this decoder.
+
+## Build dependencies
 
 - esbuild 0.25.10 — MIT, https://github.com/evanw/esbuild
 - fflate 0.8.2 — MIT, https://github.com/101arrowz/fflate

@@ -2,6 +2,7 @@
 import { MDXDictionary } from './mdx.js';
 import { wordAtPoint } from './word-at-point.js';
 import { queryFromText, readSelection, selectionSignature } from './selection-query.js';
+import { replaceSelectionMenu, renderSelectionTools } from './selection-menu.js';
 import { createCard, renderDefinition, element } from './render.js';
 import { LocalResources, MAX_RESOURCE } from './resources.js';
 import { ResourceScope, prepareNativeDefinition, mountNativeDefinition } from './native-render.js';
@@ -23,6 +24,7 @@ export function createApp(env, pluginID) {
   const getFolder = () => Zotero.Prefs.get(pref + 'folder') || '';
   const enabled = () => Zotero.Prefs.get(pref + 'enabled') !== false;
   const selectionEnabled = () => Zotero.Prefs.get(pref + 'selectionEnabled') !== false;
+  const integratedMenu = () => Zotero.Prefs.get(pref + 'selectionMenu') !== 'native';
   const errorText = e => String(e?.message || e);
   const log = e => Zotero.logError(e);
   const getMode = () => Zotero.Prefs.get(pref + 'displayMode') === 'text' ? 'text' : 'original';
@@ -71,6 +73,8 @@ export function createApp(env, pluginID) {
       doc.getElementById('local-mdx-status').textContent = status;
       doc.getElementById('local-mdx-enabled').checked = enabled();
       doc.getElementById('local-mdx-selection-enabled').checked = selectionEnabled();
+      doc.getElementById('local-mdx-selection-menu').value = integratedMenu() ? 'integrated' : 'native';
+      doc.getElementById('local-mdx-selection-enabled').disabled = !integratedMenu();
       doc.getElementById('local-mdx-mode').value = getMode();
       const options = resourceOptions();
       doc.getElementById('local-mdx-resource-folder').textContent = options.folder || '使用 MDX 同目录的资源';
@@ -146,6 +150,7 @@ export function createApp(env, pluginID) {
   function setEnabled(value) {
     Zotero.Prefs.set(pref + 'enabled', !!value);
     if (!value) dismissAll();
+    for (const session of sessions.values()) session.menu?.refresh();
     updateUI();
   }
 
@@ -237,10 +242,10 @@ export function createApp(env, pluginID) {
     Zotero.Prefs.set(pref + 'resources', JSON.stringify(config)); selectDictionary(getPath());
   }
 
-  function attach(view, win) {
+  function attach(view, win, internal) {
     if (!win?.document?.body || sessions.has(win) || stopped) return;
     const doc = win.document;
-    let down, card, request = 0, moved = false;
+    let down, card, request = 0, moved = false, selectionTimer, menu, passthroughSelection = false;
     const listeners = [];
     const on = (target, name, fn, capture = false) => {
       target.addEventListener(name, fn, capture);
@@ -253,21 +258,40 @@ export function createApp(env, pluginID) {
       card = undefined;
     };
     const inside = event => card && event.composedPath().includes(card.host);
-    const show = async (input, x, y) => {
+    const show = async (input, x, y, annotation) => {
       const query = typeof input === 'string' ? queryFromText(input) : input;
       if (!query) return;
       const word = query.text;
       close(); const ticket = request;
       card = createCard(doc, x, y, word, close);
       const current = card;
+      if (annotation) {
+        current.selectionSignature = selectionSignature(win, view);
+        const snapshot = JSON.parse(JSON.stringify(annotation));
+        renderSelectionTools(doc, current.selectionTools, {
+          color: Zotero.Prefs.get(pref + 'annotationColor') || '#ffd400',
+          setColor: color => Zotero.Prefs.set(pref + 'annotationColor', color),
+          readOnly: !!internal?._annotationManager?._readOnly,
+          add: async (type, color) => {
+            const saved = await view._onAddAnnotation({ ...snapshot, position: JSON.parse(JSON.stringify(snapshot.position)), type, color }, false);
+            if (!saved) throw new Error('文献只读或当前阅读器不能保存批注。');
+          },
+          onStatus: message => { if (current.host.isConnected) current.footer.textContent = message; },
+        });
+      }
       const disposers = []; let scope;
       current.cleanup = () => { disposers.forEach(dispose => { try { dispose(); } catch {} }); scope?.close(); };
       fillSelect(current.selector);
       const selectedPath = getPath();
       current.selector.addEventListener('change', () => {
         selectDictionary(current.selector.value, sessions.get(win));
-        void show(query, x, y).catch(log);
+        void show(query, x, y, annotation).catch(log);
       });
+      if (!query.candidates.length) {
+        current.choice.hidden = true; current.body.hidden = true;
+        current.footer.textContent = '选择颜色后点击高亮或下划线，保存至 Zotero';
+        current.position(); return;
+      }
       try {
         const dictionary = await loadDictionary();
         const isCurrent = () => !stopped && ticket === request && getPath() === selectedPath && current.host.isConnected;
@@ -351,11 +375,38 @@ export function createApp(env, pluginID) {
       }
       if (ticket === request) current.position();
     };
+    const showSelection = (selected, x, y) => {
+      // Leave the native menu usable if a future reader lacks the callback.
+      if (!integratedMenu() || !menu) return;
+      const annotation = menu?.popup?.annotation;
+      const query = selectionEnabled() && getPath() ? selected.query : null;
+      if (!query && !annotation) return;
+      const input = query || { text: annotation.text?.slice(0, 80) || '已选文字', candidates: [], source: 'selection' };
+      if (card?.selectionSignature === selectionSignature(win, view)) return;
+      void show(input, x, y, annotation).catch(log);
+    };
+    menu = replaceSelectionMenu(view, {
+      enabled: () => enabled() && integratedMenu() && !stopped && !passthroughSelection && view._tool?.type === 'pointer',
+      onError: log,
+      onPopup: popup => {
+        win.clearTimeout(selectionTimer);
+        selectionTimer = win.setTimeout(() => {
+          if (down || stopped || passthroughSelection || !enabled() || !integratedMenu() || view._tool?.type !== 'pointer') return;
+          const selected = readSelection(win, view);
+          if (!selected.selected) return;
+          const rect = popup.rect || [30, 30, 30, 30];
+          showSelection(selected, rect[2], rect[3]);
+        }, 0);
+      },
+    });
     on(win, 'pointerdown', event => {
       down = undefined; moved = false;
       if (inside(event)) return;
       close();
-      if (event.button !== 0 || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !enabled() || !getPath()) return;
+      passthroughSelection = event.button !== 0 || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey
+        || !event.target.closest?.('.page')
+        || !!event.target.closest?.('input,textarea,button,a,select,[contenteditable="true"],.annotationLayer,.textAnnotation');
+      if (event.button !== 0 || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !enabled()) return;
       if (view._tool?.type && view._tool.type !== 'pointer') return;
       if (event.target.closest?.('input,textarea,button,a,select,[contenteditable="true"],.annotationLayer,.textAnnotation')) return;
       if (!event.target.closest?.('.page')) return;
@@ -374,25 +425,27 @@ export function createApp(env, pluginID) {
       // Zotero's native text selection may stop bubbling pointerup. Capture it,
       // then wait a task so all reader handlers finish updating the selection.
       await new Promise(resolve => win.setTimeout(resolve, 0));
-      if (stopped || ticket !== request || !enabled() || !getPath()) return;
+      if (stopped || ticket !== request || !enabled()) return;
       const selected = readSelection(win, view);
       if (selected.selected) {
-        if (selectionEnabled() && selected.query && (wasMoved || selectionSignature(win, view) !== origin.selection)) {
-          void show(selected.query, event.clientX, event.clientY).catch(log);
-        }
+        if (wasMoved || selectionSignature(win, view) !== origin.selection) showSelection(selected, event.clientX, event.clientY);
         return;
       }
-      if (wasMoved || Date.now() - origin.time > 650 || view._isSelectionCollapsed?.() === false) return;
+      if (!getPath() || wasMoved || Date.now() - origin.time > 650 || view._isSelectionCollapsed?.() === false) return;
       const word = wordAtPoint(win, event.clientX, event.clientY, view);
       if (word) void show(word, event.clientX, event.clientY).catch(log);
     }, true);
-    on(win, 'pointercancel', () => { down = undefined; });
+    on(win, 'pointercancel', () => { down = undefined; win.clearTimeout(selectionTimer); });
     on(win, 'keydown', event => { if (event.key === 'Escape' && card) { close(); event.stopPropagation(); } }, true);
     on(win, 'scroll', event => { if (!inside(event)) close(); }, true);
     on(win, 'resize', close);
-    const cleanup = () => { close(); listeners.forEach(f => { try { f(); } catch {} }); sessions.delete(win); };
+    const cleanup = () => {
+      close(); win.clearTimeout(selectionTimer);
+      try { menu?.dispose(); } catch {}
+      listeners.forEach(f => { try { f(); } catch {} }); sessions.delete(win);
+    };
     on(win, 'unload', cleanup);
-    sessions.set(win, { close, cleanup, show, view });
+    sessions.set(win, { close, cleanup, show, view, menu });
   }
 
   function scanReaders() {
@@ -407,7 +460,7 @@ export function createApp(env, pluginID) {
         for (const view of [internal?._primaryView, internal?._secondaryView]) {
           const wrapped = view?._iframeWindow;
           const win = wrapped && Cu.unwaiveXrays(wrapped);
-          if ((win?.wrappedJSObject || win)?.PDFViewerApplication) attach(view, win);
+          if ((win?.wrappedJSObject || win)?.PDFViewerApplication) attach(view, win, internal);
         }
       } catch { /* A reader may be destroyed during the scan. */ }
     }
@@ -466,6 +519,11 @@ export function createApp(env, pluginID) {
       win.document.getElementById('local-mdx-enabled').onchange = event => setEnabled(event.target.checked);
       win.document.getElementById('local-mdx-selection-enabled').onchange = event => {
         Zotero.Prefs.set(pref + 'selectionEnabled', event.target.checked); dismissAll(); updateUI();
+      };
+      win.document.getElementById('local-mdx-selection-menu').onchange = event => {
+        Zotero.Prefs.set(pref + 'selectionMenu', event.target.value); dismissAll();
+        for (const session of sessions.values()) session.menu?.refresh();
+        updateUI();
       };
       win.document.getElementById('local-mdx-mode').onchange = event => {
         Zotero.Prefs.set(pref + 'displayMode', event.target.value); dismissAll(); updateUI();

@@ -6,6 +6,7 @@ import generateCSS from 'css-tree/generator';
 import { localReference, decodeStyle } from './resources.js';
 import { resourceKey } from './mdx.js';
 import { element } from './render.js';
+import { decodeSpeex, isOggSpeex } from './speex.js';
 
 const BLOCKED = new Set('script meta base iframe frame frameset object embed applet template noscript svg math form input button select textarea portal'.split(' '));
 const VOID = new Set('area br col hr img source track wbr'.split(' '));
@@ -89,6 +90,7 @@ export class ResourceScope {
     this.makeURL = makeURL;
     this.urls = new Map(); this.pending = new Map(); this.missing = new Set();
     this.optionalMissing = new Set();
+    this.audioPending = new Map();
     this.bytes = 0; this.closed = false;
   }
   async url(reference, base = '', { required = true } = {}) {
@@ -116,10 +118,36 @@ export class ResourceScope {
     if (!result.url && required) this.missing.add(result.reason);
     return result.url;
   }
+  async audioURL(reference) {
+    if (this.closed) throw new Error('查词窗口已关闭。');
+    const key = localReference(reference);
+    if (!key) return '';
+    const normalized = 'audio:' + resourceKey(key);
+    if (!this.audioPending.has(normalized)) {
+      this.audioPending.set(normalized, (async () => {
+        const resource = await this.resources.read(key);
+        if (!resource) { this.missing.add(key); return ''; }
+        if (this.closed) throw new Error('查词窗口已关闭。');
+        if (!/\.spx$/i.test(key) && !isOggSpeex(resource.bytes)) return this.url(key);
+        const bytes = await decodeSpeex(resource.bytes, {
+          cancelled: () => this.closed,
+          yieldControl: this.win ? () => new Promise(resolve => this.win.setTimeout(resolve, 0)) : undefined,
+          randomFill: this.win ? buffer => this.win.crypto.getRandomValues(buffer) : undefined,
+        });
+        if (this.closed) throw new Error('查词窗口已关闭。');
+        if (this.urls.size >= 256 || this.bytes + bytes.length > 96 * 1024 * 1024) throw new Error('解码发音超过查词窗口资源限额。');
+        this.bytes += bytes.length;
+        const converted = { bytes, mime: 'audio/wav' };
+        const url = this.makeURL ? this.makeURL(converted) : this.win.URL.createObjectURL(new this.win.Blob([bytes], { type: converted.mime }));
+        this.urls.set(normalized, url); return url;
+      })());
+    }
+    return this.audioPending.get(normalized);
+  }
   close() {
     this.closed = true;
     if (!this.makeURL) for (const url of this.urls.values()) { try { this.win.URL.revokeObjectURL(url); } catch {} }
-    this.urls.clear(); this.pending.clear();
+    this.urls.clear(); this.pending.clear(); this.audioPending.clear();
   }
 }
 
@@ -254,13 +282,23 @@ export async function prepareNativeDefinition(html, scope) {
         // MDict also uses empty <audio name="..."> tags as metadata.
         // Only real src attributes become playable native audio controls.
         if (attributes.src) {
-          const url = await scope.url(attributes.src);
+          let url;
+          try { url = await scope.audioURL(attributes.src); }
+          catch (e) { scope.missing.add(attributes.src + '（' + e.message + '）'); }
           if (url) { attrs.src = url; attrs.controls = ''; attrs.preload = 'none'; }
         }
       }
       if (tag === 'source' && attributes.src) {
-        const url = await scope.url(attributes.src);
-        if (url) attrs.src = url;
+        let url;
+        const audioSource = node.parentNode?.tagName?.replace(/^xhtml:/, '') === 'audio';
+        try { url = audioSource ? await scope.audioURL(attributes.src) : await scope.url(attributes.src); }
+        catch (e) { scope.missing.add(attributes.src + '（' + e.message + '）'); }
+        if (url) {
+          attrs.src = url;
+          // A Speex source becomes WAV. Let the Blob's MIME type describe the
+          // resolved audio rather than retaining a stale source type hint.
+          if (audioSource) delete attrs.type;
+        }
       }
       if (tag === 'a' && attributes.href) {
         if (/^sound:\/\//i.test(attributes.href)) {
@@ -268,7 +306,7 @@ export async function prepareNativeDefinition(html, scope) {
           if (key) {
             attrs['data-mdx-audio'] = key; attrs.tabindex = '0'; attrs.role = 'button'; attrs['aria-label'] ||= '播放发音';
             const extension = key.split('.').pop().toUpperCase();
-            const hint = extension === 'SPX' ? 'SPX/Speex 发音（当前未接入解码）' : `${extension} 发音`;
+            const hint = extension === 'SPX' ? 'SPX/Speex 发音（插件离线解码）' : `${extension} 发音`;
             attrs.title = attrs.title ? attrs.title + ' · ' + hint : hint;
           }
         } else {
@@ -333,17 +371,17 @@ export function mountNativeDefinition(doc, container, plan, scope, { onEntry, on
         const ticket = ++audioRequest;
         audio?.pause(); onStatus?.('正在读取发音…');
         try {
-          const url = await scope.url(key);
+          const url = await scope.audioURL(key);
           if (disposed || ticket !== audioRequest) return;
           if (!url) throw new Error('未找到音频：' + key);
           audio = element(frameDoc, 'audio'); audio.src = url;
           audio.addEventListener('error', () => {
-            if (!disposed && ticket === audioRequest) onStatus?.(/\.spx$/i.test(key) ? 'SPX/Speex 解码尚未接入，可选择此词条的 MP3 发音图标。' : '当前环境无法播放此音频。');
+            if (!disposed && ticket === audioRequest) onStatus?.('音频播放失败：可能是文件损坏或当前环境不支持此格式。');
           });
           await audio.play();
           if (!disposed && ticket === audioRequest) onStatus?.('正在播放发音');
         } catch (e) {
-          if (!disposed && ticket === audioRequest) onStatus?.(/\.spx$/i.test(key) ? 'SPX/Speex 解码尚未接入，可选择此词条的 MP3 发音图标。' : e.message);
+          if (!disposed && ticket === audioRequest) onStatus?.('发音播放失败：' + e.message);
         }
       };
       const activate = event => {
