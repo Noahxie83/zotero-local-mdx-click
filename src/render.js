@@ -1,11 +1,22 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 import { parseFragment } from 'parse5';
+import { popupCSS } from './appearance.js';
 
 const HTML = 'http://www.w3.org/1999/xhtml';
-const skip = new Set('script style link meta base iframe frame frameset object embed applet template svg math audio video source track img input button select textarea form noscript'.split(' '));
+const skip = new Set('script style link meta base iframe frame frameset object embed applet template svg math audio video source track img input button select textarea form noscript audio-wr audio-gbs-liju audio-uss-liju audio-brs-liju audio-br-liju audio-gb-liju audio-ams-liju audio-us-liju audio-n_am-liju'.split(' '));
 const safe = new Set('div p span br hr b i em strong u s small sub sup ul ol li dl dt dd blockquote table tbody thead tfoot tr th td ruby rt rp h1 h2 h3 h4 h5 h6'.split(' '));
-const blocks = new Set('entry entry-g h-g top-g sn-g sn-gs sn-blk subentry-g x-gs x-g-blk unbox shcut-blk sense sense-g x-g xr-g idm-g pv-g runon-g phrvb-g gram-g etym-g note-g def-g examples idioms'.split(' '));
-const classTokens = new Set('headword h hw def definition chn cn zh x example phon pos sn num label unbox oxford3000'.split(' '));
+const blocks = new Set('entry entry-g h-g top-g sn-gs sn-blk sn-blk-nolist subentry-g x-gs x-g-blk unbox shcut-blk sense sense-g x-g xr-g idm-g pv-g runon-g phrvb-g etym-g note-g def-g examples idioms xr-gs'.split(' '));
+const classTokens = new Set([
+  ...blocks,
+  ...'headword h hw def definition chn cn zh x example phon pos sn num label oxford3000 hkey symbol pron-gs pron-g-blk pron-g phon-blk brelabel namelabel audio-gb audio-us pos-g pos-blk shcut sdsymb sn-g licontent gram-g gram-blk gram xsymb x-wr cf-blk cf cl-blk cl gl-blk gl label-g label-g-blk xh idm pv boxtag pron ipa hwrap word-frequency dcb dcn'.split(' '),
+]);
+
+function retainListNumber(source, target, attribute) {
+  const value = source.attrs?.find(attr => attr.name === attribute)?.value;
+  if (value && /^-?\d{1,6}$/.test(value) && Math.abs(Number(value)) <= 100000) {
+    target.setAttribute(attribute, String(Number(value)));
+  }
+}
 
 export function element(doc, tag, text) {
   const node = doc.createElementNS(HTML, tag);
@@ -39,6 +50,14 @@ export function renderDefinition(doc, html) {
         if (classTokens.has(token)) node.classList.add('dict-' + token);
       }
       if (blocks.has(tag)) node.classList.add('dict-block');
+      // Keep real sense numbering without copying arbitrary HTML attributes.
+      if (tag === 'ol') retainListNumber(child, node, 'start');
+      if (tag === 'li') retainListNumber(child, node, 'value');
+      if (tag === 'pron-g-blk') {
+        const region = child.childNodes?.some(part => part.tagName === 'namelabel') ? '美式音标' :
+          child.childNodes?.some(part => part.tagName === 'brelabel') ? '英式音标' : undefined;
+        if (region) node.setAttribute('title', region);
+      }
       target.appendChild(node);
       pending.push({ source: child, target: node, depth: depth + 1 });
     }
@@ -54,17 +73,11 @@ export function createCard(doc, x, y, word, close) {
   host.style.cssText = 'all:initial;position:fixed;z-index:2147483647;display:block;box-sizing:border-box;';
   const root = host.attachShadow({ mode: 'open' });
   const style = element(doc, 'style');
-  style.textContent = `
-    :host { color-scheme:light dark; }
-    * {box-sizing:border-box} .card {width:min(460px,calc(100vw - 24px));max-height:min(480px,calc(100vh - 24px));display:flex;flex-direction:column;border:1px solid #bac2ca;border-radius:10px;background:#fff;color:#222;box-shadow:0 5px 24px #0003;font:14px/1.65 system-ui,'Microsoft YaHei',sans-serif;user-select:text}
-    header {display:flex;gap:12px;align-items:center;padding:10px 14px;border-bottom:1px solid #e6e9ec} h2 {font-size:17px;line-height:1.4;margin:0;flex:1;overflow-wrap:anywhere} button {font:inherit;font-size:20px;background:transparent;border:0;border-radius:4px;color:inherit;cursor:pointer;padding:0 7px} button:hover{background:#8882}
-    .body {padding:10px 16px;overflow:auto;min-height:45px;overflow-wrap:anywhere} .source {font-size:11px;opacity:.65;padding:5px 14px;border-top:1px solid #e6e9ec;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .dictionary-choice {padding:6px 14px;border-bottom:1px solid #e6e9ec}select{font:inherit;font-size:12px;max-width:100%;width:100%;padding:4px;border:1px solid #aaa7;border-radius:4px;background:transparent;color:inherit}.dict-block,p {margin:6px 0} .dict-chn,.dict-cn,.dict-zh {color:#23583f} .dict-x,.dict-example {font-style:italic;color:#555} .dict-pos,.dict-phon {color:#666} .dict-h,.dict-hw,.dict-headword {font-size:18px;font-weight:700} .dict-num,.dict-sn {font-weight:700;margin-right:.3em} h1,h2,h3,h4{font-size:16px} table{border-collapse:collapse;max-width:100%}td,th{padding:3px}ul,ol{padding-left:22px} section+section{border-top:1px solid #bbb;padding-top:8px;margin-top:10px}
-    @media(prefers-color-scheme:dark){.card{background:#26292d;color:#eceff1;border-color:#626a72}header,.source{border-color:#454a50}.dict-chn,.dict-cn,.dict-zh{color:#a3d7b8}.dict-x,.dict-example,.dict-pos,.dict-phon{color:#bbb}}
-  `;
+  style.textContent = popupCSS;
   const card = element(doc, 'div'); card.className = 'card';
   card.setAttribute('role', 'dialog'); card.setAttribute('aria-label', '本地词典：' + word);
   const header = element(doc, 'header');
-  header.append(element(doc, 'h2', word));
+  header.append(element(doc, 'h2', '查词 · ' + word));
   const button = element(doc, 'button', '×'); button.type = 'button';
   button.setAttribute('aria-label', '关闭释义'); button.addEventListener('click', close);
   header.append(button);
@@ -73,7 +86,8 @@ export function createCard(doc, x, y, word, close) {
   const footer = element(doc, 'div', '本地 MDX'); footer.className = 'source';
   const choice = element(doc, 'div'); choice.className = 'dictionary-choice';
   const selector = element(doc, 'select'); selector.setAttribute('aria-label', '选择查询词典');
-  choice.append(selector);
+  const choiceLabel = element(doc, 'span', '词典'); choiceLabel.className = 'dictionary-label';
+  choice.append(choiceLabel, selector);
   card.append(header, choice, body, footer); root.append(style, card); doc.body.append(host);
   const position = () => {
     const rect = host.getBoundingClientRect();
