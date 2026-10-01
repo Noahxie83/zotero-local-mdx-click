@@ -19,4 +19,4 @@ Design Read：GitHub README + 离线 HTML；视觉变化 5、动效 2、信息�
 
 原创项目文字标识：`assets/wordmark.svg`。封面：`assets/cover.svg`。产品示例：`index.html` 复用 `src/render.js`、`src/native-render.js`、`src/selection-menu.js` 等真实模块。自制示例 MDX/MDD 在构建时生成并嵌入页面，展示文本、CSS、网络示意图和提示音均为本项目原创；不使用用户的商业词典、音频、字体和桌面截图。
 
-页面明确区分浏览器示例和 Zotero 实际批注保存；示例批注按钮只反馈选中类型/颜色，不写入文献库。安装包版本保持 1.1.2，文档展示属于发布后的首页更新。
+页面明确区分浏览器示例和 Zotero 实际批注保存；示例批注按钮只反馈选中类型/颜色，不写入文献库。1.1.3 将原标识的图形用于插件管理器和设置页，独立图标位于 `addon/icons/local-mdx.svg`。

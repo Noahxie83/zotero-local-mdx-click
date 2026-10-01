@@ -1,12 +1,12 @@
-# 完整使用指南 · Local MDX 1.1.2
+# 完整使用指南 · Local MDX 1.1.3
 
 在 Zotero 10.0 系列 PDF 阅读器中单击英文单词，或划选完整的单词与词组，查询所选本地 MDX 词典，并读取配套 MDD 分卷或外置文件中的样式、图片、字体与音频。
 
-**当前版本为 1.1.2，内置 SPX/Speex 解码器。** [下载安装包](https://github.com/Noahxie83/zotero-local-mdx-click/releases/tag/v1.1.2)。版本修复与验证范围见 [1.1.2 验证记录](REVIEW_FIXES_1.1.2.md)。
+**当前版本为 1.1.3，内置 SPX/Speex 解码器。** [下载安装包](https://github.com/Noahxie83/zotero-local-mdx-click/releases/tag/v1.1.3)。版本修复与验证范围见 [1.1.2 验证记录](REVIEW_FIXES_1.1.2.md)。
 
 ## 安装与查词
 
-1. Zotero → 工具 → 插件 → 齿轮 → 从文件安装插件，选择 `local-mdx-click-1.1.2.xpi`，完成后重启 Zotero。覆盖已有版本后，原词典路径与选择保留。
+1. Zotero → 工具 → 插件 → 齿轮 → 从文件安装插件，选择 `local-mdx-click-1.1.3.xpi`，完成后重启 Zotero。覆盖已有版本后，原词典路径与选择保留。
 2. 设置 → 本地 MDX 点击查词 → 选择词典文件夹，指定存放词典的目录。也可以直接选择 MDX 文件。插件列出其同目录当前层的全部 `.mdx`。
 3. 从下拉框选择当前词典。已有选择继续保留；首次按名称排序选择第一部词典。
 4. 显示方式默认“词典原有排版”，读取词条实际引用的样式和资源。也可切换为“简洁文字排版”。
@@ -94,7 +94,7 @@ SPX 输入限额 8 MB，整个文件的累计音频最长 30 秒（包括连接�
 
 从 [GitHub Releases](https://github.com/Noahxie83/zotero-local-mdx-click/releases) 下载 `.xpi` 安装包、源码 ZIP 和校验和。词典需另行准备，可在 [PDAWiki · MDict 专区](https://www.pdawiki.com/forum/forum.php?gid=7) 搜索，并按作者授权获取文件。安装后选择词典目录即可使用。
 
-各历史版本保留对应安装包、源码快照与说明，当前稳定版为 1.1.2。最新文档与示例源码位于仓库 `main` 分支，版本资产对应其发布时的快照。各版详情见 [版本变更](CHANGES.md)。公开 HTML 演示使用项目自制词典，支持下载后离线打开。
+各历史版本保留对应安装包、源码快照与说明，当前稳定版为 1.1.3。最新文档与示例源码位于仓库 `main` 分支，版本资产对应其发布时的快照。各版详情见 [版本变更](CHANGES.md)。公开 HTML 演示使用项目自制词典，支持下载后离线打开。
 
 ## 开发
 

@@ -8,14 +8,14 @@
 <p align="center">在文献阅读中查询单词与词组，使用本地词典的释义、排版和发音。</p>
 
 <p align="center">
-  <a href="https://github.com/Noahxie83/zotero-local-mdx-click/releases/tag/v1.1.2"><img alt="版本 1.1.2" src="https://img.shields.io/badge/version-1.1.2-087bd0"></a>
+  <a href="https://github.com/Noahxie83/zotero-local-mdx-click/releases/tag/v1.1.3"><img alt="版本 1.1.3" src="https://img.shields.io/badge/version-1.1.3-087bd0"></a>
   <img alt="支持 Zotero 10.0 系列" src="https://img.shields.io/badge/Zotero-10.0-102b46">
   <a href="https://github.com/Noahxie83/zotero-local-mdx-click/actions/workflows/build.yml"><img alt="构建状态" src="https://github.com/Noahxie83/zotero-local-mdx-click/actions/workflows/build.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="GPL 3.0 or later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-586d7f"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Noahxie83/zotero-local-mdx-click/releases/download/v1.1.2/local-mdx-click-1.1.2.xpi"><b>下载安装包</b></a> ·
+  <a href="https://github.com/Noahxie83/zotero-local-mdx-click/releases/download/v1.1.3/local-mdx-click-1.1.3.xpi"><b>下载安装包</b></a> ·
   <a href="https://noahxie83.github.io/zotero-local-mdx-click/"><b>体验交互示例</b></a> ·
   <a href="docs/USER_GUIDE.md">使用指南</a> ·
   <a href="docs/RESTORE.md">设置恢复</a> ·
